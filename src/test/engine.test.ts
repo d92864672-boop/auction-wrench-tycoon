@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyGrant, dailyUpdate, newGame } from "./engine";
+import { applyGrant, dailyUpdate, newGame } from "@/game/engine";
 
 describe("shop delivery", () => {
   it("credits 10 000 000 ₽ for the money case", () => {
