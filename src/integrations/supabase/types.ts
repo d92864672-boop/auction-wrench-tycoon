@@ -14,13 +14,139 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          nickname: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          nickname: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          nickname?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      game_saves: {
+        Row: {
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          state?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      item_grants: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      market_listings: {
+        Row: {
+          buyer_id: string | null
+          car: Json
+          created_at: string
+          id: string
+          price: number
+          seller_id: string
+          seller_nickname: string
+          status: string
+        }
+        Insert: {
+          buyer_id?: string | null
+          car: Json
+          created_at?: string
+          id?: string
+          price: number
+          seller_id: string
+          seller_nickname: string
+          status?: string
+        }
+        Update: {
+          buyer_id?: string | null
+          car?: Json
+          created_at?: string
+          id?: string
+          price?: number
+          seller_id?: string
+          seller_nickname?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          level: number
+          net_worth: number
+          nickname: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          level?: number
+          net_worth?: number
+          nickname?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: number
+          net_worth?: number
+          nickname?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      buy_listing: { Args: { _listing_id: string }; Returns: Json }
+      collect_sales: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
