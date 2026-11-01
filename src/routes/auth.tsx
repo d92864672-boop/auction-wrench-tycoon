@@ -35,7 +35,7 @@ function AuthPage() {
     if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) return toast.error("Неверная почта или пароль");
+      if (error) { toast.error("Неверная почта или пароль"); return; }
       navigate({ to: "/" });
     } else {
       const { error } = await supabase.auth.signUp({
@@ -44,14 +44,14 @@ function AuthPage() {
         options: { emailRedirectTo: window.location.origin, data: { nickname: nickname || undefined } },
       });
       setBusy(false);
-      if (error) return toast.error(error.message);
+      if (error) { toast.error(error.message); return; }
       toast.success("Проверь почту и подтверди аккаунт");
     }
   };
 
   const oauth = async (provider: "google" | "lovable") => {
     const r = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
-    if (r.error) return toast.error("Не удалось войти");
+    if (r.error) { toast.error("Не удалось войти"); return; }
     if (r.redirected) return;
     navigate({ to: "/" });
   };

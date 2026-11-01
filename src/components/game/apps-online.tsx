@@ -125,12 +125,12 @@ export function OnlineApp() {
   }, [load, collect]);
 
   const buy = async (l: ListingRow) => {
-    if (state.money < l.price) return toast.error("Не хватает денег");
-    if (state.garage.length >= garageCapacity(state)) return toast.error("Гараж заполнен");
+    if (state.money < l.price) { toast.error("Не хватает денег"); return; }
+    if (state.garage.length >= garageCapacity(state)) { toast.error("Гараж заполнен"); return; }
     const { error } = await supabase.rpc("buy_listing", { _listing_id: l.id });
     if (error) {
       toast.error("Машину уже купили");
-      return load();
+      { load(); return; }
     }
     act((s) => ({
       state: { ...s, money: s.money - l.price, garage: [...s.garage, { ...l.car, id: Math.random().toString(36).slice(2), boughtFor: l.price }], stats: { ...s.stats, carsBought: s.stats.carsBought + 1 } },
@@ -141,9 +141,9 @@ export function OnlineApp() {
 
   const publish = async (car: Car) => {
     const p = Math.floor(Number(price.replace(/\s/g, "")));
-    if (!user || !p || p <= 0) return toast.error("Укажи цену");
+    if (!user || !p || p <= 0) { toast.error("Укажи цену"); return; }
     const { error } = await supabase.from("market_listings").insert({ seller_id: user.id, seller_nickname: nickname, car: car as never, price: p });
-    if (error) return toast.error("Не удалось выставить");
+    if (error) { toast.error("Не удалось выставить"); return; }
     act((s) => ({ state: { ...s, garage: s.garage.filter((c) => c.id !== car.id) }, message: "Выставлено на барахолку" }));
     setSellCar(null);
     setPrice("");
@@ -151,9 +151,9 @@ export function OnlineApp() {
   };
 
   const cancel = async (l: ListingRow) => {
-    if (state.garage.length >= garageCapacity(state)) return toast.error("Освободи место в гараже");
+    if (state.garage.length >= garageCapacity(state)) { toast.error("Освободи место в гараже"); return; }
     const { data, error } = await supabase.from("market_listings").update({ status: "cancelled" }).eq("id", l.id).eq("status", "active").select();
-    if (error || !data?.length) return toast.error("Не получилось снять — возможно, уже купили");
+    if (error || !data?.length) { toast.error("Не получилось снять — возможно, уже купили"); return; }
     act((s) => ({ state: { ...s, garage: [...s.garage, l.car] }, message: "Снято с продажи" }));
     load();
   };

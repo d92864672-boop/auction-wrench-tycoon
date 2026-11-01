@@ -65,7 +65,7 @@ export type GameState = {
   xp: number;
   vipUntilDay: number;
   appliedGrants: string[];
-  job?: Job;
+  job?: Job | undefined;
 };
 
 export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt: number; pay: number };
@@ -138,7 +138,7 @@ export function garageCapacity(s: GameState): number {
 
 function randomCar(rand: () => number, allowRare: boolean): Car {
   const pool = CAR_MODELS.filter((m) => (allowRare ? m.rare : !m.rare) && m.id !== "wert");
-  const m = pool[Math.floor(rand() * pool.length)];
+  const m = pool[Math.floor(rand() * pool.length)]!;
   const minYear = m.id === "vaz2107" ? 1985 : m.rare ? 1987 : 1998;
   const year = Math.min(CURRENT_YEAR, minYear + Math.floor(rand() * (CURRENT_YEAR - minYear + 1)));
   const age = CURRENT_YEAR - year;
@@ -349,7 +349,7 @@ export function dailyUpdate(s: GameState, rand = Math.random): { state: GameStat
   const fines = [...s.fines];
   if (s.garage.length > 0 && rand() < 0.2) {
     const reasons = ["Превышение скорости", "Парковка на газоне", "Не пропустил пешехода", "Тонировка"];
-    fines.push({ id: uid(), reason: reasons[Math.floor(rand() * reasons.length)], amount: 500 + Math.floor(rand() * 5) * 1000 });
+    fines.push({ id: uid(), reason: reasons[Math.floor(rand() * reasons.length)]!, amount: 500 + Math.floor(rand() * 5) * 1000 });
     messages.push("Пришёл новый штраф в Госуслуги");
   }
   const next: GameState = { ...s, money, deposit: s.deposit + depositInterest, loan, taxDue, fines };

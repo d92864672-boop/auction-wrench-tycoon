@@ -118,8 +118,8 @@ export function CasinoApp() {
     });
 
   const spin = () => {
-    if (!b || state.money < b) return toast.error("Не хватает денег");
-    const r = Array.from({ length: 3 }, () => SLOT[Math.floor(Math.random() * SLOT.length)]);
+    if (!b || state.money < b) { toast.error("Не хватает денег"); return; }
+    const r = Array.from({ length: 3 }, () => SLOT[Math.floor(Math.random() * SLOT.length)]!);
     setSlots(r);
     const three = r[0] === r[1] && r[1] === r[2];
     const two = !three && (r[0] === r[1] || r[1] === r[2] || r[0] === r[2]);

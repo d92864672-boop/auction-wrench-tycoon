@@ -208,7 +208,7 @@ export function AuctionApp() {
 
   const bid = () => {
     const next = Math.round(lot.bid * 1.05);
-    if (state.money < next) return toast.error("Не хватает денег на ставку");
+    if (state.money < next) { toast.error("Не хватает денег на ставку"); return; }
     setLot((l) => ({ ...l, bid: next, leader: "you", endsAt: Math.max(l.endsAt, Date.now() + 8_000) }));
   };
 
