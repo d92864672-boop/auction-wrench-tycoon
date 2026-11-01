@@ -15,11 +15,11 @@ export function Section({ title, children, right }: { title?: string; children: 
   );
 }
 
-export function Tile({ children, className }: { children: ReactNode; className?: string }) {
+export function Tile({ children, className }: { children: ReactNode; className?: string | undefined }) {
   return <div className={cn("rounded-2xl border border-border bg-card p-3", className)}>{children}</div>;
 }
 
-export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: "good" | "bad" }) {
+export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: "good" | "bad" | undefined }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
       <p className="text-[11px] text-muted-foreground">{label}</p>

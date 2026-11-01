@@ -154,7 +154,7 @@ type Lot = { car: Car; bid: number; leader: "you" | "bot"; endsAt: number; botMa
 
 function newLot(): Lot {
   const rares = CAR_MODELS.filter((m) => m.rare && m.id !== "wert");
-  const m = rares[Math.floor(Math.random() * rares.length)];
+  const m = rares[Math.floor(Math.random() * rares.length)]!;
   const car: Car = {
     id: Math.random().toString(36).slice(2),
     modelId: m.id,
@@ -191,7 +191,7 @@ export function AuctionApp() {
   const left = Math.max(0, Math.ceil((lot.endsAt - now) / 1000));
 
   useEffect(() => {
-    if (left > 0 || done.current) return;
+    if (left > 0 || done.current) return undefined;
     done.current = true;
     if (lot.leader === "you") {
       act((s) => {
@@ -203,6 +203,7 @@ export function AuctionApp() {
         };
       });
     } else toast("Лот забрал другой участник");
+    return undefined;
   }, [left, lot, act]);
 
   const bid = () => {

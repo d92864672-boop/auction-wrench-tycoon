@@ -23,8 +23,8 @@ export type Car = {
   year: number;
   mileage: number;
   condition: number; // 0..100
-  plate?: string;
-  boughtFor?: number;
+  plate?: string | undefined;
+  boughtFor?: number | undefined;
 };
 export type Listing = Car & { price: number };
 export type OwnedBusiness = { uid: string; typeId: string; level: number };
@@ -119,8 +119,8 @@ export const gameDay = (s: GameState) => Math.floor(s.minutes / 1440) + 1;
 export const level = (s: GameState) => Math.floor(Math.sqrt(s.xp / 1000)) + 1;
 export const isVip = (s: GameState) => s.vipUntilDay >= gameDay(s);
 export const upg = (s: GameState, id: string) => s.upgrades[id] ?? 0;
-export const cityOf = (s: GameState) => CITIES.find((c) => c.id === s.cityId) ?? CITIES[0];
-export const modelOf = (id: string): CarModel => CAR_MODELS.find((m) => m.id === id) ?? CAR_MODELS[0];
+export const cityOf = (s: GameState) => CITIES.find((c) => c.id === s.cityId) ?? CITIES[0]!;
+export const modelOf = (id: string): CarModel => CAR_MODELS.find((m) => m.id === id) ?? CAR_MODELS[0]!;
 
 export function carValue(car: Car): number {
   const m = modelOf(car.modelId);
