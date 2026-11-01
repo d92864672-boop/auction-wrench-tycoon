@@ -65,7 +65,10 @@ export type GameState = {
   xp: number;
   vipUntilDay: number;
   appliedGrants: string[];
+  job?: Job;
 };
+
+export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt: number; pay: number };
 
 export type Result = { state: GameState; error?: string; message?: string };
 
@@ -384,6 +387,28 @@ export function advance(s: GameState, gameMinutes: number): { state: GameState; 
     }
   }
   return { state, messages };
+}
+
+export function startJob(
+  s: GameState,
+  kind: Job["kind"],
+  opt: { id: string; name: string; pay: number; seconds: number },
+  now = Date.now(),
+): Result {
+  if (s.job) return { state: s, error: "Сначала закончи текущую работу" };
+  const bonus = kind === "delivery" ? upg(s, "logistics") : upg(s, "charisma");
+  const pay = Math.round(opt.pay * (1 + 0.2 * bonus));
+  return { state: { ...s, job: { kind, id: opt.id, name: opt.name, pay, endAt: now + opt.seconds * 1000 } }, message: `Начато: ${opt.name}` };
+}
+
+export function finishJob(s: GameState, now = Date.now()): Result {
+  const j = s.job;
+  if (!j) return { state: s, error: "Нет активной работы" };
+  if (now < j.endAt) return { state: s, error: "Ещё не готово" };
+  const stats = { ...s.stats };
+  if (j.kind === "delivery") stats.deliveries += 1;
+  else stats.shifts += 1;
+  return { state: addXp({ ...s, money: s.money + j.pay, job: undefined, stats }, 80), message: `Получено ${fmt(j.pay)}` };
 }
 
 export type Quest = { id: string; title: string; reward: number; progress: (s: GameState) => [number, number] };
