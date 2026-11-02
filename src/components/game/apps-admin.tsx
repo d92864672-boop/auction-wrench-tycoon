@@ -57,7 +57,7 @@ function SelfTab({ userId, deliver }: { userId: string; deliver: () => Promise<n
   const [amount, setAmount] = useState("");
   const [item, setItem] = useState(SHOP_ITEMS[0]?.id ?? "");
   const give = async (n: number) => {
-    if (!n) return toast.error("Укажи сумму");
+    if (!n) { toast.error("Укажи сумму"); return; }
     if (await run(supabase.rpc("admin_give_money", { _user_id: userId, _amount: n }), "Выдано")) await deliver();
   };
   return (
@@ -127,9 +127,9 @@ function PlayersTab() {
           <Button
             onClick={async () => {
               const n = parseAmount(allAmount);
-              if (!n) return toast.error("Укажи сумму");
+              if (!n) { toast.error("Укажи сумму"); return; }
               const { data, error } = await supabase.rpc("admin_give_money_all", { _amount: n });
-              if (error) return toast.error(error.message);
+              if (error) { toast.error(error.message); return; }
               toast.success(`Выдано ${fmt(n)} — игроков: ${data}`);
               setAllAmount("");
             }}
@@ -168,7 +168,7 @@ function PlayerActions({ p, onDone }: { p: Player; onDone: () => void }) {
 
   const money = async (sign: 1 | -1) => {
     const n = parseAmount(amount);
-    if (!n) return toast.error("Укажи сумму");
+    if (!n) { toast.error("Укажи сумму"); return; }
     if (await run(supabase.rpc("admin_give_money", { _user_id: p.id, _amount: sign * n }), sign > 0 ? `Выдано ${fmt(n)}` : `Списано ${fmt(n)}`)) setAmount("");
   };
 
