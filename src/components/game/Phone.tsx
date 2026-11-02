@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import {
   ArrowLeft, Building2, CreditCard, Gavel, Globe, Hash, Home, Landmark, LineChart, Package, Plane, Send,
-  Settings, ShoppingBag, Smartphone, Store, Tag, TrendingUp, Trophy, User, Wrench, Dices,
+  Settings, ShieldAlert, ShoppingBag, Smartphone, Store, Tag, TrendingUp, Trophy, User, Wrench, Dices,
 } from "lucide-react";
 import { useGame } from "@/game/store";
 import { QUESTS, cityOf, fmt, gameDay, level, netWorth, fmtShort } from "@/game/engine";
@@ -9,6 +9,7 @@ import { AuctionApp, GosApp, PerekupApp, PlatesApp, RepairApp } from "./apps-car
 import { BankApp, BusinessApp, CasinoApp, RealtyApp, StocksApp } from "./apps-money";
 import { AccessoriesApp, DeliveryApp, QuestsApp, SettingsApp, ShiftApp, TravelApp, UpgradesApp } from "./apps-life";
 import { MessengerApp, OnlineApp, ShopApp } from "./apps-online";
+import { AdminApp } from "./apps-admin";
 
 type AppDef = { id: string; name: string; icon: ComponentType<{ className?: string }>; color: string; C: ComponentType };
 
@@ -35,20 +36,23 @@ const APPS: AppDef[] = [
   { id: "messenger", name: "Мессенджер", icon: Send, color: "icon-sky", C: MessengerApp },
 ];
 
+const ADMIN_APP: AppDef = { id: "admin", name: "Админка", icon: ShieldAlert, color: "icon-red", C: AdminApp };
+
 function clock(min: number) {
   const m = min % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
 export function Phone() {
-  const { state } = useGame();
+  const { state, isAdmin, ban } = useGame();
+  const apps = isAdmin ? [...APPS, ADMIN_APP] : APPS;
   const [open, setOpen] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const app = APPS.find((a) => a.id === open);
+  const app = apps.find((a) => a.id === open);
   const questReady = QUESTS.filter((q) => { const [p, t] = q.progress(state); return p >= t && !state.questsClaimed.includes(q.id); }).length;
   const badges: Record<string, number> = {
     quests: questReady,
@@ -56,6 +60,18 @@ export function Phone() {
     delivery: state.job?.kind === "delivery" && now >= state.job.endAt ? 1 : 0,
     shift: state.job?.kind === "shift" && now >= state.job.endAt ? 1 : 0,
   };
+  if (ban) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-sm space-y-3 text-center">
+          <ShieldAlert className="mx-auto h-12 w-12 text-destructive" />
+          <h1 className="font-display text-2xl font-semibold">Аккаунт заблокирован</h1>
+          <p className="text-sm text-muted-foreground">Администрация wertперекуп заблокировала ваш аккаунт.</p>
+          {ban.reason && <p className="text-sm">Причина: {ban.reason}</p>}
+        </div>
+      </div>
+    );
+  }
   const wp = state.wallpaper === "default" ? "wp-default" : state.wallpaper;
 
   return (
@@ -76,7 +92,7 @@ export function Phone() {
               <div><p className="text-[11px] text-muted-foreground">Уровень</p><p className="font-display text-sm">{level(state)}</p></div>
             </div>
             <div className="mt-6 grid grid-cols-4 gap-x-2 gap-y-5">
-              {APPS.map((a) => (
+              {apps.map((a) => (
                 <button key={a.id} onClick={() => setOpen(a.id)} className="flex flex-col items-center gap-1.5 transition-transform active:scale-90">
                   <span className={`icon ${a.color} relative flex h-14 w-14 items-center justify-center rounded-2xl`}>
                     <a.icon className="h-7 w-7" />
