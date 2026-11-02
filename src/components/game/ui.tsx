@@ -16,7 +16,7 @@ export function Section({ title, children, right }: { title?: string; children: 
 }
 
 export function Tile({ children, className }: { children: ReactNode; className?: string | undefined }) {
-  return <div className={cn("rounded-2xl border border-border bg-card p-3", className)}>{children}</div>;
+  return <div className={cn("anim-fade-up rounded-2xl border border-border bg-card p-3", className)}>{children}</div>;
 }
 
 export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: "good" | "bad" | undefined }) {
