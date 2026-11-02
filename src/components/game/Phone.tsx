@@ -83,7 +83,7 @@ export function Phone() {
           <span>{fmtShort(state.money)}</span>
         </div>
         {!app ? (
-          <main className="flex flex-1 flex-col px-5 pb-6">
+          <main className="anim-fade-up flex flex-1 flex-col px-5 pb-6">
             <p className="mt-6 font-display text-7xl font-light tracking-tight">{clock(state.minutes)}</p>
             <p className="mt-1 text-lg font-medium">День {gameDay(state)} · {cityOf(state).name}</p>
             <div className="glass mt-4 grid grid-cols-3 gap-2 rounded-2xl p-3 text-center">
@@ -92,8 +92,8 @@ export function Phone() {
               <div><p className="text-[11px] text-muted-foreground">Уровень</p><p className="font-display text-sm">{level(state)}</p></div>
             </div>
             <div className="mt-6 grid grid-cols-4 gap-x-2 gap-y-5">
-              {apps.map((a) => (
-                <button key={a.id} onClick={() => setOpen(a.id)} className="flex flex-col items-center gap-1.5 transition-transform active:scale-90">
+              {apps.map((a, i) => (
+                <button key={a.id} onClick={() => setOpen(a.id)} style={{ animationDelay: `${i * 25}ms` }} className="anim-icon-pop flex flex-col items-center gap-1.5 transition-transform active:scale-90">
                   <span className={`icon ${a.color} relative flex h-14 w-14 items-center justify-center rounded-2xl`}>
                     <a.icon className="h-7 w-7" />
                     {(badges[a.id] ?? 0) > 0 && (
@@ -111,7 +111,7 @@ export function Phone() {
             </div>
           </main>
         ) : (
-          <div className="flex flex-1 flex-col bg-background">
+          <div key={app.id} className="anim-app-in flex flex-1 flex-col bg-background">
             <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background px-4 py-3">
               <button onClick={() => setOpen(null)} aria-label="Назад" className="rounded-full p-1 hover:bg-muted">
                 <ArrowLeft className="h-5 w-5" />
