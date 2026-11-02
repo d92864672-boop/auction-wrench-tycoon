@@ -237,8 +237,8 @@ export function CasinoApp() {
     setResult(null);
     const r = [pick(), pick(), pick()];
     setSpinning([true, true, true]);
-    const tick = setInterval(() => setSlots((cur) => cur.map((c, i) => (spinningRef.current[i] ? pick() : c))), 80);
     const spinningRef = { current: [true, true, true] };
+    const tick = setInterval(() => setSlots((cur) => cur.map((c, i) => (spinningRef.current[i] ? pick() : c))), 80);
     [600, 1000, 1400].forEach((ms, i) =>
       setTimeout(() => {
         spinningRef.current[i] = false;
