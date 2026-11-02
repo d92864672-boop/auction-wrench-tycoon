@@ -5,6 +5,14 @@ import { Input } from "@/components/ui/input";
 import { useGame } from "@/game/store";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  TAP_PAY_PER_LEVEL,
+  buyAllUpgrades,
+  claimAllQuests,
+  hotCity,
+  rushJob,
+  sellAccessory,
+  tapWork,
+  travelPrice,
   QUESTS,
   buyUpgrade,
   claimQuest,
@@ -45,9 +53,14 @@ function ActiveJob({ kind }: { kind: "delivery" | "shift" }) {
       <div className="my-2">
         <Progress value={pct} />
       </div>
-      <Button className="w-full" disabled={left > 0} onClick={() => act((s) => finishJob(s))}>
+      <Button className={left > 0 ? "w-full" : "shimmer w-full"} disabled={left > 0} onClick={() => act((s) => finishJob(s))}>
         {left > 0 ? `Осталось ${Math.ceil(left / 1000)} с` : `Забрать ${fmt(j.pay)}`}
       </Button>
+      {left > 0 && kind === "delivery" && (
+        <Button variant="outline" className="mt-2 w-full" onClick={() => act((s) => rushJob(s))}>
+          🚀 Срочно доставить (−25%: {fmt(Math.round(j.pay * 0.75))})
+        </Button>
+      )}
     </Tile>
   );
 }
@@ -81,12 +94,43 @@ export function DeliveryApp() {
   );
 }
 
+function Tapper() {
+  const { state, set } = useGame();
+  const [pops, setPops] = useState<{ id: number; x: number }[]>([]);
+  const pay = TAP_PAY_PER_LEVEL * level(state);
+  return (
+    <Tile className="relative space-y-2 overflow-hidden text-center">
+      <p className="font-semibold">⚡ Подработка: разгрузка фуры</p>
+      <p className="text-xs text-muted-foreground">Каждое нажатие — {fmt(pay)}. Растёт с уровнем.</p>
+      <button
+        className="icon icon-coral mx-auto flex h-24 w-24 items-center justify-center rounded-full text-4xl transition-transform active:scale-90"
+        aria-label="Разгрузить коробку"
+        onClick={(e) => {
+          set((s) => tapWork(s));
+          const id = Date.now() + Math.random();
+          const rect = e.currentTarget.getBoundingClientRect();
+          setPops((p) => [...p.slice(-6), { id, x: e.clientX - rect.left - 48 }]);
+          setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1100);
+        }}
+      >
+        📦
+      </button>
+      {pops.map((p) => (
+        <span key={p.id} className="anim-float pointer-events-none absolute left-1/2 top-1/2 font-display text-sm font-semibold text-success" style={{ marginLeft: p.x }}>
+          +{fmtShort(pay)}
+        </span>
+      ))}
+    </Tile>
+  );
+}
+
 export function ShiftApp() {
   const { state, act } = useGame();
   const lvl = level(state);
   return (
     <div className="space-y-3">
       <ActiveJob kind="shift" />
+      <Tapper />
       <Section title={`Вакансии · ваш уровень ${lvl}`}>
         {JOBS.map((j) => {
           const locked = (j.minLevel ?? 1) > lvl;
@@ -110,8 +154,12 @@ export function ShiftApp() {
 
 export function QuestsApp() {
   const { state, act } = useGame();
+  const readyCount = QUESTS.filter((q) => { const [p, t] = q.progress(state); return p >= t && !state.questsClaimed.includes(q.id); }).length;
   return (
     <div className="space-y-2">
+      {readyCount > 1 && (
+        <Button className="shimmer w-full" onClick={() => act((s) => claimAllQuests(s))}>🏆 Забрать все награды ({readyCount})</Button>
+      )}
       {QUESTS.map((q) => {
         const [p, t] = q.progress(state);
         const claimed = state.questsClaimed.includes(q.id);
@@ -142,10 +190,15 @@ export function QuestsApp() {
 export function TravelApp() {
   const { state, act } = useGame();
   const here = cityOf(state);
+  const hot = hotCity(state);
   const originName = { ru: "отечественные", eu: "европейские", jp: "японские", us: "американские" } as const;
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">Покупай дёшево в одном городе — продавай дорого в другом.</p>
+      <Tile className="icon-orange border-0">
+        <p className="font-semibold">🔥 Горящий билет дня</p>
+        <p className="text-sm opacity-90">Сегодня в {CITIES.find((c) => c.id === hot)?.name} — билет за полцены. Завтра будет другой город.</p>
+      </Tile>
       {CITIES.map((c) => (
         <Tile key={c.id} className={c.id === here.id ? "border-primary" : undefined}>
           <div className="flex items-center justify-between gap-2">
@@ -157,7 +210,9 @@ export function TravelApp() {
               </p>
             </div>
             {c.id !== here.id && (
-              <Button size="sm" onClick={() => act((s) => travel(s, c.id))}>{fmt(Math.max(c.travel, here.travel))}</Button>
+              <Button size="sm" className={c.id === hot ? "shimmer" : undefined} onClick={() => act((s) => travel(s, c.id))}>
+                {c.id === hot ? "🔥 " : ""}{fmt(travelPrice(state, c.id))}
+              </Button>
             )}
           </div>
         </Tile>
@@ -170,6 +225,7 @@ export function UpgradesApp() {
   const { state, act } = useGame();
   return (
     <div className="space-y-2">
+      <Button className="w-full" onClick={() => act((s) => buyAllUpgrades(s))}>⬆️ Прокачать всё, на что хватает денег</Button>
       {UPGRADES.map((u) => {
         const l = upg(state, u.id);
         return (
@@ -177,6 +233,7 @@ export function UpgradesApp() {
             <div>
               <p className="font-semibold">{u.name} · {l}/{u.max}</p>
               <p className="text-xs text-muted-foreground">{u.desc}</p>
+              <div className="mt-1 h-1 w-32 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${(l / u.max) * 100}%` }} /></div>
             </div>
             <Button size="sm" disabled={l >= u.max} onClick={() => act((s) => buyUpgrade(s, u.id))}>
               {l >= u.max ? "Макс." : fmtShort(upgradeCost(state, u.id))}
@@ -192,7 +249,7 @@ export function AccessoriesApp() {
   const { state, act, set } = useGame();
   return (
     <div className="space-y-2">
-      <p className="text-sm text-muted-foreground">Вещи добавляют к капиталу. Обои меняют фон телефона.</p>
+      <p className="text-sm text-muted-foreground">Вещи добавляют к капиталу. Обои меняют фон телефона. Ненужное можно продать за 70%.</p>
       {ACCESSORIES.map((a) => {
         const owned = state.accessories.includes(a.id);
         return (
@@ -210,7 +267,7 @@ export function AccessoriesApp() {
                   {state.wallpaper === a.id ? "Стоит" : "Поставить"}
                 </Button>
               ) : (
-                <span className="text-xs text-success">Куплено</span>
+                <Button size="sm" variant="outline" onClick={() => act((s) => sellAccessory(s, a.id))}>Продать {fmtShort(Math.round(a.price * 0.7))}</Button>
               )
             ) : (
               <Button
@@ -261,6 +318,25 @@ export function SettingsApp() {
             </Button>
           </Tile>
         )}
+      </Section>
+      <Section title="Моя статистика">
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            ["Куплено машин", state.stats.carsBought],
+            ["Продано машин", state.stats.carsSold],
+            ["Прибыль с перепродаж", fmtShort(state.stats.profit)],
+            ["Ремонтов", state.stats.repairs],
+            ["Доставок", state.stats.deliveries],
+            ["Смен", state.stats.shifts],
+            ["Побед в казино", state.stats.casinoWins],
+            ["Уровень", level(state)],
+          ].map(([label, value]) => (
+            <Tile key={String(label)} className="p-2.5">
+              <p className="text-[11px] text-muted-foreground">{label}</p>
+              <p className="font-display text-sm font-semibold">{value}</p>
+            </Tile>
+          ))}
+        </div>
       </Section>
       <Section title="Обои">
         <div className="flex flex-wrap gap-2">
