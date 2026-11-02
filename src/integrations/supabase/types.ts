@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      bans: {
+        Row: {
+          banned_by: string | null
+          created_at: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          banned_by?: string | null
+          created_at?: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          banned_by?: string | null
+          created_at?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           body: string
@@ -58,6 +79,7 @@ export type Database = {
       }
       item_grants: {
         Row: {
+          amount: number | null
           created_at: string
           id: string
           item_id: string
@@ -65,6 +87,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          amount?: number | null
           created_at?: string
           id?: string
           item_id: string
@@ -72,6 +95,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          amount?: number | null
           created_at?: string
           id?: string
           item_id?: string
@@ -140,16 +164,83 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_ban: {
+        Args: { _reason: string; _user_id: string }
+        Returns: undefined
+      }
+      admin_broadcast: { Args: { _text: string }; Returns: undefined }
+      admin_delete_message: {
+        Args: { _message_id: string }
+        Returns: undefined
+      }
+      admin_give_money: {
+        Args: { _amount: number; _user_id: string }
+        Returns: undefined
+      }
+      admin_give_money_all: { Args: { _amount: number }; Returns: number }
+      admin_grant_item: {
+        Args: { _item_id: string; _user_id: string }
+        Returns: undefined
+      }
+      admin_list_players: {
+        Args: { _search?: string }
+        Returns: {
+          ban_reason: string
+          banned: boolean
+          email: string
+          id: string
+          level: number
+          net_worth: number
+          nickname: string
+        }[]
+      }
+      admin_remove_listing: {
+        Args: { _listing_id: string }
+        Returns: undefined
+      }
+      admin_reset_player: { Args: { _user_id: string }; Returns: undefined }
+      admin_set_nickname: {
+        Args: { _nickname: string; _user_id: string }
+        Returns: undefined
+      }
+      admin_unban: { Args: { _user_id: string }; Returns: undefined }
+      assert_admin: { Args: never; Returns: undefined }
       buy_listing: { Args: { _listing_id: string }; Returns: Json }
       collect_sales: { Args: never; Returns: number }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_banned: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -276,6 +367,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
