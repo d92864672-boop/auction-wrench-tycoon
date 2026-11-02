@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGame } from "@/game/store";
 import {
   CURRENT_YEAR,
   buyListing,
+  buyoutLot,
+  buyoutPrice,
   carValue,
+  disputeFine,
+  negotiate,
+  orderPlate,
+  repairAll,
+  sellerAnswer,
+  type Listing,
   cityOf,
   fmt,
   garageCapacity,
@@ -20,6 +30,7 @@ import {
   type Car,
 } from "@/game/engine";
 import { CAR_MODELS, plateValue } from "@/game/data";
+import { carPhotos } from "@/game/photos";
 import { Empty, Progress, Section, Stat, Tile } from "./ui";
 
 function CarInfo({ car }: { car: Car }) {
@@ -39,9 +50,132 @@ function CarInfo({ car }: { car: Car }) {
   );
 }
 
+function CarPhotos({ car }: { car: Pick<Car, "id" | "modelId" | "name"> }) {
+  const photos = carPhotos(car);
+  const [idx, setIdx] = useState(0);
+  return (
+    <div className="relative -mx-3 -mt-3 mb-3 overflow-hidden rounded-t-2xl">
+      <div
+        className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setIdx(Math.round(el.scrollLeft / el.clientWidth));
+        }}
+      >
+        {photos.map((src, i) => (
+          <img key={i} src={src} alt={`${car.name}, фото ${i + 1}`} loading="lazy" width={992} height={672} className="aspect-[3/2] w-full shrink-0 snap-center object-cover" />
+        ))}
+      </div>
+      <span className="glass absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold">
+        📷 {idx + 1}/{photos.length}
+      </span>
+      {photos.length > 1 && (
+        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+          {photos.map((_, i) => (
+            <span key={i} className={i === idx ? "h-1.5 w-4 rounded-full bg-foreground transition-all" : "h-1.5 w-1.5 rounded-full bg-foreground/50 transition-all"} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SELLERS = ["Ашот", "Дядя Витя", "Серёга", "Марина", "Тимур", "Олег Палыч", "Гоша", "Рустам"];
+const sellerName = (id: string) => SELLERS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % SELLERS.length]!;
+
+type ChatMsg = { from: "me" | "seller"; text: string };
+
+function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: ChatMsg[]; setLog: (fn: (m: ChatMsg[]) => ChatMsg[]) => void; onClose: () => void }) {
+  const { state, set, act } = useGame();
+  const [typing, setTyping] = useState(false);
+  const [offer, setOffer] = useState("");
+  const bottom = useRef<HTMLDivElement>(null);
+  const name = sellerName(listing.id);
+  const tries = listing.tries ?? 3;
+
+  useEffect(() => bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [log, typing]);
+
+  const sellerSays = (text: string) => {
+    setTyping(true);
+    setTimeout(() => {
+      setTyping(false);
+      setLog((m) => [...m, { from: "seller", text }]);
+    }, 700 + Math.random() * 600);
+  };
+
+  const ask = (label: string, q: "mileage" | "accident" | "owners" | "docs") => {
+    setLog((m) => [...m, { from: "me", text: label }]);
+    sellerSays(sellerAnswer(listing, q));
+  };
+
+  const propose = (amount: number) => {
+    if (!amount) { toast.error("Введите сумму"); return; }
+    setLog((m) => [...m, { from: "me", text: `Отдадите за ${fmt(amount)}?` }]);
+    const roll = Math.random();
+    const r = negotiate(state, listing.id, amount, roll);
+    set((s) => negotiate(s, listing.id, amount, roll).state);
+    sellerSays(r.reply);
+    setOffer("");
+  };
+
+  return (
+    <div className="anim-app-in flex min-h-[70vh] flex-col">
+      <div className="flex items-center gap-3 border-b border-border pb-3">
+        <Button size="sm" variant="ghost" onClick={onClose}>← Назад</Button>
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary font-display text-sm text-primary-foreground">{name[0]}</div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{name}</p>
+          <p className="truncate text-xs text-muted-foreground">{listing.name} · {fmt(listing.price)}</p>
+        </div>
+      </div>
+      <div className="flex-1 space-y-2 py-3">
+        <img src={carPhotos(listing)[0]} alt={listing.name} width={992} height={672} className="mx-auto aspect-[3/2] w-2/3 rounded-xl object-cover" />
+        {log.map((m, i) => (
+          <div key={i} className={m.from === "me" ? "anim-msg flex justify-end" : "anim-msg flex justify-start"}>
+            <div className={m.from === "me" ? "max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground" : "max-w-[80%] rounded-2xl rounded-bl-sm bg-card px-3 py-2 text-sm"}>
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {typing && (
+          <div className="flex justify-start">
+            <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-card px-3 py-3">
+              <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+              <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+              <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+            </div>
+          </div>
+        )}
+        <div ref={bottom} />
+      </div>
+      <div className="sticky bottom-0 space-y-2 bg-background pt-2">
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          <Button size="sm" variant="secondary" onClick={() => ask("Пробег реальный?", "mileage")}>Пробег?</Button>
+          <Button size="sm" variant="secondary" onClick={() => ask("Битая? Крашеная?", "accident")}>ДТП?</Button>
+          <Button size="sm" variant="secondary" onClick={() => ask("Сколько владельцев?", "owners")}>Владельцы?</Button>
+          <Button size="sm" variant="secondary" onClick={() => ask("Документы в порядке?", "docs")}>Документы?</Button>
+        </div>
+        <p className="text-center text-[11px] text-muted-foreground">Попыток торга: {tries}</p>
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.9) / 1000) * 1000)}>−10%</Button>
+          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.8) / 1000) * 1000)}>−20%</Button>
+          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.7) / 1000) * 1000)}>−30%</Button>
+        </div>
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); propose(Math.floor(Number(offer.replace(/\s/g, "")))); }}>
+          <Input inputMode="numeric" value={offer} disabled={tries <= 0} onChange={(e) => setOffer(e.target.value)} placeholder="Своя цена" />
+          <Button type="submit" variant="secondary" disabled={tries <= 0 || typing}>Предложить</Button>
+        </form>
+        <Button className="w-full" onClick={() => { if (act((s) => buyListing(s, listing.id))) onClose(); }}>Купить за {fmt(listing.price)}</Button>
+      </div>
+    </div>
+  );
+}
+
 export function PerekupApp() {
   const { state, act, set } = useGame();
   const [haggle, setHaggle] = useState<Record<string, number>>({});
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<Record<string, ChatMsg[]>>({});
   const cap = garageCapacity(state);
 
   const refresh = () =>
@@ -53,6 +187,19 @@ export function PerekupApp() {
     setHaggle((h) => ({ ...h, [car.id]: ok ? 1.08 : 0.92 }));
     toast(ok ? "Покупатель согласился на +8%" : "Покупатель обиделся: −8%");
   };
+
+  const chatListing = state.listings.find((l) => l.id === chatId);
+  if (chatId && chatListing) {
+    const log = logs[chatId] ?? [{ from: "seller" as const, text: `Здравствуйте! ${chatListing.name} ещё продаётся. Прошу ${fmt(chatListing.price)}. Торг у капота 😉` }];
+    return (
+      <SellerChat
+        listing={chatListing}
+        log={log}
+        setLog={(fn) => setLogs((l) => ({ ...l, [chatId]: fn(l[chatId] ?? log) }))}
+        onClose={() => setChatId(null)}
+      />
+    );
+  }
 
   return (
     <Tabs defaultValue="market">
@@ -70,7 +217,8 @@ export function PerekupApp() {
           const v = carValue(l);
           const deal = (v - l.price) / v;
           return (
-            <Tile key={l.id}>
+            <Tile key={l.id} className="overflow-hidden">
+              <CarPhotos car={l} />
               <CarInfo car={l} />
               <div className="mt-2 flex items-end justify-between gap-2">
                 <div>
@@ -80,7 +228,12 @@ export function PerekupApp() {
                     {modelOf(l.modelId).rare ? " · Редкая" : ""}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => act((s) => buyListing(s, l.id))}>Купить</Button>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" variant="secondary" className="flex-1" onClick={() => setChatId(l.id)}>
+                  <MessageCircle /> Написать {sellerName(l.id)}
+                </Button>
+                <Button size="sm" className="flex-1" onClick={() => act((s) => buyListing(s, l.id))}>Купить</Button>
               </div>
             </Tile>
           );
@@ -92,7 +245,8 @@ export function PerekupApp() {
           const offer = Math.round(saleOffer(state, c) * (haggle[c.id] ?? 1));
           const profit = offer - (c.boughtFor ?? 0);
           return (
-            <Tile key={c.id}>
+            <Tile key={c.id} className="overflow-hidden">
+              <CarPhotos car={c} />
               <CarInfo car={c} />
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                 <p className="text-muted-foreground">Куплена: {fmt(c.boughtFor ?? 0)}</p>
@@ -133,11 +287,17 @@ export function RepairApp() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">После ремонта машина стоит дороже. Улучшение «Свой механик» снижает цену.</p>
+      {broken.length > 1 && (
+        <Button className="w-full" onClick={() => act((s) => repairAll(s))}>
+          🔧 Отремонтировать все · {fmt(broken.reduce((a, c) => a + repairCost(state, c), 0))}
+        </Button>
+      )}
       {broken.length === 0 && <Empty>Все машины в идеальном состоянии</Empty>}
       {broken.map((c) => {
         const after = carValue({ ...c, condition: 100 }) - carValue(c);
         return (
-          <Tile key={c.id}>
+          <Tile key={c.id} className="overflow-hidden">
+            <CarPhotos car={c} />
             <CarInfo car={c} />
             <div className="mt-2 flex items-center justify-between">
               <p className="text-xs text-success">Стоимость вырастет на {fmt(after)}</p>
@@ -214,7 +374,8 @@ export function AuctionApp() {
 
   return (
     <div className="space-y-3">
-      <Tile>
+      <Tile className="overflow-hidden">
+        <CarPhotos car={lot.car} />
         <p className="text-xs uppercase tracking-wider text-warning">Редкий лот</p>
         <div className="mt-1">
           <CarInfo car={lot.car} />
@@ -222,7 +383,7 @@ export function AuctionApp() {
         <p className="mt-2 text-xs text-muted-foreground">Рыночная оценка: {fmt(carValue(lot.car))}</p>
       </Tile>
       <div className="grid grid-cols-2 gap-2">
-        <Stat label="Текущая ставка" value={fmt(lot.bid)} />
+        <div key={lot.bid} className="anim-land"><Stat label="Текущая ставка" value={fmt(lot.bid)} /></div>
         <Stat label="До конца" value={`${left} с`} tone={left < 8 ? "bad" : undefined} />
       </div>
       <p className="text-center text-sm">{lot.leader === "you" ? "Вы лидируете" : "Лидирует другой участник"}</p>
@@ -230,7 +391,22 @@ export function AuctionApp() {
         <Button className="w-full" size="lg" onClick={bid} disabled={lot.leader === "you"}>
           Поднять до {fmt(Math.round(lot.bid * 1.05))}
         </Button>
-      ) : (
+      ) : null}
+      {left > 0 && (
+        <Button
+          className="w-full"
+          variant="outline"
+          onClick={() => {
+            if (act((s) => buyoutLot(s, lot.car))) {
+              done.current = true;
+              setLot((l) => ({ ...l, endsAt: Date.now() - 1, leader: "bot" }));
+            }
+          }}
+        >
+          ⚡ Выкупить сразу за {fmt(buyoutPrice(lot.car))}
+        </Button>
+      )}
+      {left > 0 ? null : (
         <Button
           className="w-full"
           size="lg"
@@ -251,6 +427,7 @@ export function PlatesApp() {
   const { state, act } = useGame();
   const [offers, setOffers] = useState(() => newPlateOffers());
   const [target, setTarget] = useState<string | null>(null);
+  const [digits, setDigits] = useState("");
   return (
     <Tabs defaultValue="buy">
       <TabsList className="w-full">
@@ -258,6 +435,14 @@ export function PlatesApp() {
         <TabsTrigger value="mine" className="flex-1">Мои номера {state.plates.length}</TabsTrigger>
       </TabsList>
       <TabsContent value="buy" className="mt-3 space-y-2">
+        <Tile className="space-y-2">
+          <p className="text-sm font-semibold">Заказать номер со своими цифрами</p>
+          <p className="text-xs text-muted-foreground">Стоимость — двойная цена номера. Например, 777 или 001.</p>
+          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (act((s) => orderPlate(s, digits))) setDigits(""); }}>
+            <Input inputMode="numeric" maxLength={3} value={digits} onChange={(e) => setDigits(e.target.value.replace(/\D/g, ""))} placeholder="3 цифры" />
+            <Button type="submit">Заказать</Button>
+          </form>
+        </Tile>
         <Button variant="secondary" size="sm" className="w-full" onClick={() => setOffers(newPlateOffers())}>Показать другие</Button>
         {offers.map((o) => (
           <Tile key={o.plate} className="flex items-center justify-between">
@@ -379,8 +564,10 @@ export function GosApp() {
           <Tile key={f.id} className="flex items-center justify-between">
             <div>
               <p className="font-semibold">{f.reason}</p>
-              <p className="text-xs text-muted-foreground">{fmt(f.amount)}</p>
+              <p className="text-xs text-muted-foreground">{fmt(f.amount)}{f.disputed ? " · жалоба отклонена" : ""}</p>
             </div>
+            <div className="flex gap-1">
+            <Button size="sm" variant="outline" disabled={f.disputed} onClick={() => act((s) => disputeFine(s, f.id, Math.random()))}>Обжаловать</Button>
             <Button
               size="sm"
               variant="secondary"
@@ -392,6 +579,7 @@ export function GosApp() {
             >
               Оплатить
             </Button>
+            </div>
           </Tile>
         ))}
       </Section>
