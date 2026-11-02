@@ -14,3 +14,5 @@
 - Game state is a single JSON blob saved to localStorage and, when signed in, to `game_saves` — simplest sync for a client-side game.
 - Paid shop items are delivered only via rows in `item_grants` (server-written), applied once by grant id — payment webhooks just insert rows.
 - Phone apps are in-page screens registered in `src/components/game/Phone.tsx`, not routes — the game is one phone UI.
+- Admin powers run only through SECURITY DEFINER `admin_*` SQL functions that call `assert_admin()` (role in `user_roles`); money/item/reset effects reach players as `item_grants` rows — client is never trusted for admin checks.
+- Bans live in `bans`; RLS blocks banned users from chat, market, profile and save updates, and the phone shows a block screen.
