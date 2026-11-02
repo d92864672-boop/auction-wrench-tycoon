@@ -26,6 +26,8 @@ type Ctx = {
   cloudReady: boolean;
   checkGrants: () => Promise<number>;
   reset: () => void;
+  isAdmin: boolean;
+  ban: { reason: string } | null;
 };
 
 const GameCtx = createContext<Ctx | null>(null);
@@ -44,6 +46,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [nickname, setNick] = useState("Игрок");
   const [cloudReady, setCloudReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [ban, setBan] = useState<{ reason: string } | null>(null);
 
   const set = useCallback((fn: (s: GameState) => GameState) => setState((s) => fn(s)), []);
 
@@ -102,17 +106,42 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const checkGrants = useCallback(async () => {
     if (!user) return 0;
-    const { data } = await supabase.from("item_grants").select("id,item_id").order("created_at");
+    const { data } = await supabase.from("item_grants").select("id,item_id,amount").order("created_at");
     let count = 0;
     for (const g of data ?? []) {
       if (stateRef.current.appliedGrants.includes(g.id)) continue;
-      const r = applyGrant(stateRef.current, g.id, g.item_id);
+      const r = applyGrant(stateRef.current, g.id, g.item_id, g.amount);
       stateRef.current = r.state;
       setState(r.state);
       if (r.message) toast.success(`Покупка доставлена: ${r.message}`);
       count++;
     }
     return count;
+  }, [user]);
+
+  // Admin role + ban status
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      setBan(null);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      const [{ data: admin }, { data: b }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+        supabase.from("bans").select("reason").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      setIsAdmin(Boolean(admin));
+      setBan(b ? { reason: b.reason } : null);
+    };
+    check();
+    const id = setInterval(check, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [user]);
 
   // Cloud load when signed in
@@ -199,7 +228,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <GameCtx.Provider value={{ state, set, act, user, nickname, setNickname, cloudReady, checkGrants, reset }}>
+    <GameCtx.Provider value={{ state, set, act, user, nickname, setNickname, cloudReady, checkGrants, reset, isAdmin, ban }}>
       {children}
     </GameCtx.Provider>
   );
