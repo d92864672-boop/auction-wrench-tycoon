@@ -15,6 +15,13 @@
       "when": 1793593616330,
       "tag": "0001_admin_panel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793594256846,
+      "tag": "0002_admin_v2_timed_bans_mutes_promos",
+      "breakpoints": true
     }
   ]
 }
