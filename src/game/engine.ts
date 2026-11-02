@@ -770,4 +770,4 @@ export function adCampaign(s: GameState): Result {
   return { state: { ...s, money: s.money - cost, adUntilDay: gameDay(s) + 1 }, message: "Реклама запущена: завтра доход бизнесов +50%" };
 }
 
-export const WHEEL = [0, 1.5, 0, 2, 0.5, 3, 0, 1.5, 0.5, 10, 0, 2];
+export const WHEEL = [0, 1.5, 0, 2, 0, 0.5, 0, 1.5, 0, 5, 0, 0.5];
