@@ -18,3 +18,19 @@ describe("business day", () => {
     expect(dailyUpdate(s, () => 0.99).state.money - s.money).toBe(26_000 - 3_600);
   });
 });
+
+describe("admin deliveries", () => {
+  it("admin money adds the exact amount", () => {
+    const s = newGame();
+    expect(applyGrant(s, "a1", "admin-money", 1_000_000_000_000).state.money).toBe(s.money + 1_000_000_000_000);
+  });
+  it("admin take-away never goes below zero", () => {
+    expect(applyGrant(newGame(), "a2", "admin-money", -1e15).state.money).toBe(0);
+  });
+  it("admin reset restores a new game but remembers the grant", () => {
+    const rich = { ...newGame(), money: 5e9 };
+    const r = applyGrant(rich, "a3", "admin-reset").state;
+    expect(r.money).toBe(newGame().money);
+    expect(r.appliedGrants).toContain("a3");
+  });
+});

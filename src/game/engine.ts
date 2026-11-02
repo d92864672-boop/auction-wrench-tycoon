@@ -435,12 +435,22 @@ export function claimQuest(s: GameState, id: string): Result {
   return { state: addXp({ ...s, money: s.money + q.reward, questsClaimed: [...s.questsClaimed, id] }, 500), message: `Награда: ${fmt(q.reward)}` };
 }
 
-/** Delivers a purchased shop item into the game. Each grant id is applied once. */
-export function applyGrant(s: GameState, grantId: string, itemId: string): Result {
+/** Delivers a purchased shop item (or admin action) into the game. Each grant id is applied once. */
+export function applyGrant(s: GameState, grantId: string, itemId: string, amount?: number | null): Result {
   if (s.appliedGrants.includes(grantId)) return { state: s };
   let next: GameState = { ...s, appliedGrants: [...s.appliedGrants, grantId] };
   let message = "";
   switch (itemId) {
+    case "admin-money": {
+      const a = Math.round(Number(amount ?? 0));
+      next.money = Math.max(0, next.money + a);
+      message = a >= 0 ? `Администрация начислила ${fmt(a)}` : `Администрация списала ${fmt(-a)}`;
+      break;
+    }
+    case "admin-reset":
+      next = { ...newGame(), appliedGrants: [...s.appliedGrants, grantId] };
+      message = "Администрация сбросила ваш прогресс";
+      break;
     case "pack-start":
       next.money += 1_000_000;
       message = "Зачислено 1 000 000 ₽";
