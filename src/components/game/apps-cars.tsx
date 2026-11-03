@@ -85,6 +85,18 @@ const sellerName = (id: string) => SELLERS[[...id].reduce((a, c) => a + c.charCo
 
 type ChatMsg = { from: "me" | "seller"; text: string };
 
+/** Ready-made haggling phrases: each asks for a different discount. */
+const PHRASES = [
+  { text: "Можете сбросить цену по-братски?", off: 0.07 },
+  { text: "Я начинающий перекуп, сбросьте, пожалуйста, цену.", off: 0.1 },
+  { text: "Наличка прямо сейчас, скинете?", off: 0.12 },
+  { text: "Заберу сегодня, без лишних вопросов.", off: 0.08 },
+  { text: "Там же ремонт нужен, скиньте.", off: 0.15 },
+  { text: "На рынке дешевле видел, уступите?", off: 0.18 },
+  { text: "Студент, последние деньги, войдите в положение 🙏", off: 0.2 },
+  { text: "Дам половину — и разойдёмся.", off: 0.5 },
+];
+
 function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: ChatMsg[]; setLog: (fn: (m: ChatMsg[]) => ChatMsg[]) => void; onClose: () => void }) {
   const { state, set, act } = useGame();
   const [typing, setTyping] = useState(false);
