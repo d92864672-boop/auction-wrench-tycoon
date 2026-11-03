@@ -178,7 +178,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!cloudReady) return;
     checkGrants();
-    const id = setInterval(checkGrants, 30_000);
+    const id = setInterval(checkGrants, 10_000);
     return () => clearInterval(id);
   }, [cloudReady, checkGrants]);
 
