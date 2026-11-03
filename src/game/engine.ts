@@ -25,6 +25,8 @@ export type Car = {
   condition: number; // 0..100
   plate?: string | undefined;
   boughtFor?: number | undefined;
+  services?: string[] | undefined; // finished workshop services
+  inService?: { id: string; endAt: number } | undefined;
 };
 export type Listing = Car & { price: number; floor?: number | undefined; tries?: number | undefined };
 export type OwnedBusiness = { uid: string; typeId: string; level: number };
@@ -136,7 +138,8 @@ export function carValue(car: Car): number {
   const ageF = m.rare ? Math.max(0.6, 1 - age * 0.01) : Math.max(0.2, Math.pow(0.93, age));
   const condF = 0.35 + 0.65 * (car.condition / 100);
   const mileF = Math.max(0.5, 1 - car.mileage / 600_000);
-  return Math.round(m.base * ageF * condF * mileF) + (car.plate ? plateValue(car.plate) : 0);
+  const bonus = (car.services ?? []).reduce((a, id) => a + (SERVICES.find((x) => x.id === id)?.bonus ?? 0), 0);
+  return Math.round(m.base * ageF * condF * mileF * (1 + bonus)) + (car.plate ? plateValue(car.plate) : 0);
 }
 
 export function garageCapacity(s: GameState): number {
@@ -771,3 +774,46 @@ export function adCampaign(s: GameState): Result {
 }
 
 export const WHEEL = [0, 1.5, 0, 2, 0, 0.5, 0, 1.5, 0, 5, 0, 0.5];
+
+
+// ============= Workshop services (30 s each) =============
+export const SERVICE_SECONDS = 30;
+export const SERVICES = [
+  { id: "paint", name: "Перекраска", cost: 0.03, bonus: 0.08 },
+  { id: "polish", name: "Полировка", cost: 0.01, bonus: 0.03 },
+  { id: "engine", name: "Замена двигателя", cost: 0.08, bonus: 0.15 },
+  { id: "interior", name: "Химчистка салона", cost: 0.01, bonus: 0.03 },
+  { id: "tint", name: "Тонировка", cost: 0.005, bonus: 0.02 },
+  { id: "wheels", name: "Новые диски", cost: 0.03, bonus: 0.06 },
+];
+
+export function serviceCost(car: Car, serviceId: string): number {
+  const sv = SERVICES.find((x) => x.id === serviceId);
+  return sv ? Math.round((modelOf(car.modelId).base * sv.cost) / 100) * 100 : 0;
+}
+
+export function startService(s: GameState, carId: string, serviceId: string, now = Date.now()): Result {
+  const car = s.garage.find((c) => c.id === carId);
+  const sv = SERVICES.find((x) => x.id === serviceId);
+  if (!car || !sv) return { state: s, error: "Не найдено" };
+  if (car.inService) return { state: s, error: "Машина уже в работе" };
+  if (car.services?.includes(serviceId)) return { state: s, error: "Уже сделано" };
+  const cost = serviceCost(car, serviceId);
+  if (s.money < cost) return { state: s, error: "Не хватает денег" };
+  return {
+    state: { ...s, money: s.money - cost, garage: s.garage.map((c) => (c.id === carId ? { ...c, inService: { id: serviceId, endAt: now + SERVICE_SECONDS * 1000 } } : c)) },
+    message: `${sv.name}: машина в работе ${SERVICE_SECONDS} с`,
+  };
+}
+
+export function finishService(s: GameState, carId: string, now = Date.now()): Result {
+  const car = s.garage.find((c) => c.id === carId);
+  if (!car?.inService) return { state: s, error: "Нет работы" };
+  if (now < car.inService.endAt) return { state: s, error: "Ещё не готово" };
+  const sv = SERVICES.find((x) => x.id === car.inService!.id)!;
+  const condition = sv.id === "engine" ? Math.min(100, car.condition + 20) : car.condition;
+  return {
+    state: addXp({ ...s, garage: s.garage.map((c) => (c.id === carId ? { ...c, condition, inService: undefined, services: [...(c.services ?? []), sv.id] } : c)) }, 80),
+    message: `${sv.name} готова: ${car.name} подорожала на ${Math.round(sv.bonus * 100)}%`,
+  };
+}

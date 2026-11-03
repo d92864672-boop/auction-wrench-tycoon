@@ -15,6 +15,11 @@ import {
   negotiate,
   orderPlate,
   repairAll,
+  SERVICES,
+  SERVICE_SECONDS,
+  finishService,
+  serviceCost,
+  startService,
   sellerAnswer,
   type Listing,
   cityOf,
@@ -304,30 +309,73 @@ export function PerekupApp() {
 
 export function RepairApp() {
   const { state, act } = useGame();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
   const broken = state.garage.filter((c) => c.condition < 100);
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">После ремонта машина стоит дороже. Улучшение «Свой механик» снижает цену.</p>
-      {broken.length > 1 && (
-        <Button className="w-full" onClick={() => act((s) => repairAll(s))}>
-          🔧 Отремонтировать все · {fmt(broken.reduce((a, c) => a + repairCost(state, c), 0))}
-        </Button>
-      )}
-      {broken.length === 0 && <Empty>Все машины в идеальном состоянии</Empty>}
-      {broken.map((c) => {
-        const after = carValue({ ...c, condition: 100 }) - carValue(c);
-        return (
+    <Tabs defaultValue="repair">
+      <TabsList className="w-full">
+        <TabsTrigger value="repair" className="flex-1">Ремонт</TabsTrigger>
+        <TabsTrigger value="tuning" className="flex-1">Услуги</TabsTrigger>
+      </TabsList>
+      <TabsContent value="repair" className="mt-3 space-y-3">
+        <p className="text-sm text-muted-foreground">После ремонта машина стоит дороже. Улучшение «Свой механик» снижает цену.</p>
+        {broken.length > 1 && (
+          <Button className="w-full" onClick={() => act((s) => repairAll(s))}>
+            🔧 Отремонтировать все · {fmt(broken.reduce((a, c) => a + repairCost(state, c), 0))}
+          </Button>
+        )}
+        {broken.length === 0 && <Empty>Все машины в идеальном состоянии</Empty>}
+        {broken.map((c) => (
           <Tile key={c.id} className="overflow-hidden">
             <CarPhotos car={c} />
             <CarInfo car={c} />
             <div className="mt-2 flex items-center justify-between">
-              <p className="text-xs text-success">Стоимость вырастет на {fmt(after)}</p>
+              <p className="text-xs text-success">Стоимость вырастет на {fmt(carValue({ ...c, condition: 100 }) - carValue(c))}</p>
               <Button size="sm" onClick={() => act((s) => repairCar(s, c.id))}>Ремонт {fmt(repairCost(state, c))}</Button>
             </div>
           </Tile>
-        );
-      })}
-    </div>
+        ))}
+      </TabsContent>
+      <TabsContent value="tuning" className="mt-3 space-y-3">
+        <p className="text-sm text-muted-foreground">Каждая услуга занимает {SERVICE_SECONDS} секунд и поднимает цену машины.</p>
+        {state.garage.length === 0 && <Empty>В гараже нет машин</Empty>}
+        {state.garage.map((c) => {
+          const job = c.inService;
+          const left = job ? Math.max(0, job.endAt - now) : 0;
+          const sv = job ? SERVICES.find((x) => x.id === job.id) : undefined;
+          return (
+            <Tile key={c.id}>
+              <CarInfo car={c} />
+              {job ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm">🛠 {sv?.name}</p>
+                  <Progress value={100 - (left / (SERVICE_SECONDS * 1000)) * 100} />
+                  <Button size="sm" className={left > 0 ? "w-full" : "shimmer w-full"} disabled={left > 0} onClick={() => act((s) => finishService(s, c.id))}>
+                    {left > 0 ? `Осталось ${Math.ceil(left / 1000)} с` : "Забрать машину"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {SERVICES.map((x) => {
+                    const done = c.services?.includes(x.id);
+                    return (
+                      <Button key={x.id} size="sm" variant={done ? "ghost" : "outline"} disabled={done} className="h-auto flex-col py-1.5 text-xs" onClick={() => act((s) => startService(s, c.id, x.id))}>
+                        <span>{done ? "✓ " : ""}{x.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{done ? "сделано" : `${fmt(serviceCost(c, x.id))} · +${Math.round(x.bonus * 100)}%`}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </Tile>
+          );
+        })}
+      </TabsContent>
+    </Tabs>
   );
 }
 
