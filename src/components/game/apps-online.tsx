@@ -48,7 +48,7 @@ export function MessengerApp() {
     };
   }, [user]);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), [msgs]);
+  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [msgs]);
 
   if (!user) return <SignInCta text="Общий чат всех игроков доступен после входа." />;
 

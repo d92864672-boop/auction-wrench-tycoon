@@ -191,7 +191,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         supabase.from("game_saves").upsert({ user_id: user.id, state: s as never, updated_at: new Date().toISOString() }),
         supabase
           .from("profiles")
-          .update({ net_worth: netWorth(s), level: level(s), updated_at: new Date().toISOString() })
+          .update({ net_worth: Math.min(netWorth(s), 9_000_000_000_000_000_000), level: level(s), updated_at: new Date().toISOString() })
           .eq("id", user.id),
       ]);
     };

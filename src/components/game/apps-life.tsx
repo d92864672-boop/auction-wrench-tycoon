@@ -294,7 +294,7 @@ export function SettingsApp() {
   const { state, set, user, nickname, setNickname, reset, cloudReady } = useGame();
   const [nick, setNick] = useState(nickname);
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => setNick(nickname), [nickname]);
+  useEffect(() => { setNick(nickname); }, [nickname]);
   const wallpapers = ["default", ...state.accessories.filter((a) => a.startsWith("wp-"))];
   return (
     <div className="space-y-4">
