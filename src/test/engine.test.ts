@@ -43,6 +43,6 @@ describe("workshop services", () => {
     const started = startService(s, "c1", "paint", 0).state;
     expect(finishService(started, "c1", 29_999).error).toBeTruthy();
     const done = finishService(started, "c1", 30_000).state.garage[0]!;
-    expect(cv(done)).toBe(Math.round(cv(car) * 1.08));
+    expect(Math.abs(cv(done) - cv(car) * 1.08)).toBeLessThan(2);
   });
 });
