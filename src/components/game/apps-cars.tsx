@@ -105,7 +105,7 @@ function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: 
   const name = sellerName(listing.id);
   const tries = listing.tries ?? 3;
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [log, typing]);
+  useEffect(() => { bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [log, typing]);
 
   const sellerSays = (text: string) => {
     setTyping(true);
