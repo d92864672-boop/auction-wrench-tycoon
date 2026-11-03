@@ -34,3 +34,15 @@ describe("admin deliveries", () => {
     expect(r.appliedGrants).toContain("a3");
   });
 });
+
+import { finishService, startService, carValue as cv } from "@/game/engine";
+describe("workshop services", () => {
+  it("repaint takes 30 seconds and raises car value by 8%", () => {
+    const car = { id: "c1", modelId: "camry", name: "Camry", year: 2020, mileage: 50_000, condition: 80 };
+    const s = { ...newGame(), money: 1e9, garage: [car] };
+    const started = startService(s, "c1", "paint", 0).state;
+    expect(finishService(started, "c1", 29_999).error).toBeTruthy();
+    const done = finishService(started, "c1", 30_000).state.garage[0]!;
+    expect(cv(done)).toBe(Math.round(cv(car) * 1.08));
+  });
+});
