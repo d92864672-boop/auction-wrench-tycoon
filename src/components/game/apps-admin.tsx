@@ -130,7 +130,7 @@ function PlayersTab() {
               if (!n) { toast.error("Укажи сумму"); return; }
               const { data, error } = await supabase.rpc("admin_give_money_all", { _amount: n });
               if (error) { toast.error(error.message); return; }
-              toast.success(`Выдано ${fmt(n)} — игроков: ${data}`);
+              toast.success(`Выдано ${fmt(n)} — игроков: ${data}. Каждый получит при входе в игру`);
               setAllAmount("");
             }}
           >
@@ -169,7 +169,7 @@ function PlayerActions({ p, onDone }: { p: Player; onDone: () => void }) {
   const money = async (sign: 1 | -1) => {
     const n = parseAmount(amount);
     if (!n) { toast.error("Укажи сумму"); return; }
-    if (await run(supabase.rpc("admin_give_money", { _user_id: p.id, _amount: sign * n }), sign > 0 ? `Выдано ${fmt(n)}` : `Списано ${fmt(n)}`)) setAmount("");
+    if (await run(supabase.rpc("admin_give_money", { _user_id: p.id, _amount: sign * n }), sign > 0 ? `Выдано ${fmt(n)} — придёт, как только игрок зайдёт в игру` : `Списано ${fmt(n)} — спишется при входе игрока`)) setAmount("");
   };
 
   return (
@@ -204,7 +204,7 @@ function PlayerActions({ p, onDone }: { p: Player; onDone: () => void }) {
         <p className="text-xs text-muted-foreground">7. Выдать предмет</p>
         <div className="flex gap-2">
           <ItemSelect value={item} onChange={setItem} />
-          <Button size="sm" variant="secondary" onClick={() => run(supabase.rpc("admin_grant_item", { _user_id: p.id, _item_id: item }), "Предмет выдан")}>
+          <Button size="sm" variant="secondary" onClick={() => run(supabase.rpc("admin_grant_item", { _user_id: p.id, _item_id: item }), "Предмет выдан — придёт при входе игрока")}>
             Выдать
           </Button>
         </div>
