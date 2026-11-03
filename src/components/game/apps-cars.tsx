@@ -85,6 +85,18 @@ const sellerName = (id: string) => SELLERS[[...id].reduce((a, c) => a + c.charCo
 
 type ChatMsg = { from: "me" | "seller"; text: string };
 
+/** Ready-made haggling phrases: each asks for a different discount. */
+const PHRASES = [
+  { text: "Можете сбросить цену по-братски?", off: 0.07 },
+  { text: "Я начинающий перекуп, сбросьте, пожалуйста, цену.", off: 0.1 },
+  { text: "Наличка прямо сейчас, скинете?", off: 0.12 },
+  { text: "Заберу сегодня, без лишних вопросов.", off: 0.08 },
+  { text: "Там же ремонт нужен, скиньте.", off: 0.15 },
+  { text: "На рынке дешевле видел, уступите?", off: 0.18 },
+  { text: "Студент, последние деньги, войдите в положение 🙏", off: 0.2 },
+  { text: "Дам половину — и разойдёмся.", off: 0.5 },
+];
+
 function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: ChatMsg[]; setLog: (fn: (m: ChatMsg[]) => ChatMsg[]) => void; onClose: () => void }) {
   const { state, set, act } = useGame();
   const [typing, setTyping] = useState(false);
@@ -108,9 +120,9 @@ function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: 
     sellerSays(sellerAnswer(listing, q));
   };
 
-  const propose = (amount: number) => {
+  const propose = (amount: number, phrase?: string) => {
     if (!amount) { toast.error("Введите сумму"); return; }
-    setLog((m) => [...m, { from: "me", text: `Отдадите за ${fmt(amount)}?` }]);
+    setLog((m) => [...m, { from: "me", text: phrase ? `${phrase} Отдадите за ${fmt(amount)}?` : `Отдадите за ${fmt(amount)}?` }]);
     const roll = Math.random();
     const r = negotiate(state, listing.id, amount, roll);
     set((s) => negotiate(s, listing.id, amount, roll).state);
@@ -155,11 +167,20 @@ function SellerChat({ listing, log, setLog, onClose }: { listing: Listing; log: 
           <Button size="sm" variant="secondary" onClick={() => ask("Сколько владельцев?", "owners")}>Владельцы?</Button>
           <Button size="sm" variant="secondary" onClick={() => ask("Документы в порядке?", "docs")}>Документы?</Button>
         </div>
-        <p className="text-center text-[11px] text-muted-foreground">Попыток торга: {tries}</p>
-        <div className="flex gap-1.5">
-          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.9) / 1000) * 1000)}>−10%</Button>
-          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.8) / 1000) * 1000)}>−20%</Button>
-          <Button size="sm" variant="outline" className="flex-1" disabled={tries <= 0 || typing} onClick={() => propose(Math.round((listing.price * 0.7) / 1000) * 1000)}>−30%</Button>
+        <p className="text-center text-[11px] text-muted-foreground">Попыток торга: {tries} · выбери, что написать</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {PHRASES.map((p) => (
+            <Button
+              key={p.text}
+              size="sm"
+              variant="outline"
+              className="h-auto whitespace-normal py-1.5 text-left text-xs leading-tight"
+              disabled={tries <= 0 || typing}
+              onClick={() => propose(Math.round((listing.price * (1 - p.off)) / 1000) * 1000, p.text)}
+            >
+              {p.text}
+            </Button>
+          ))}
         </div>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); propose(Math.floor(Number(offer.replace(/\s/g, "")))); }}>
           <Input inputMode="numeric" value={offer} disabled={tries <= 0} onChange={(e) => setOffer(e.target.value)} placeholder="Своя цена" />
