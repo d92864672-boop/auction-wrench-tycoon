@@ -72,6 +72,7 @@ export type GameState = {
   adUntilDay: number;
   renovated: string[];
   stockHistory: Record<string, number[]>;
+  imports?: ImportOrder[] | undefined;
 };
 
 export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt: number; pay: number };
@@ -815,5 +816,75 @@ export function finishService(s: GameState, carId: string, now = Date.now()): Re
   return {
     state: addXp({ ...s, garage: s.garage.map((c) => (c.id === carId ? { ...c, condition, inService: undefined, services: [...(c.services ?? []), sv.id] } : c)) }, 80),
     message: `${sv.name} готова: ${car.name} подорожала на ${Math.round(sv.bonus * 100)}%`,
+  };
+}
+
+
+// ============= Чёрный рынок =============
+/** Grey car at 50% of value; 25% chance police confiscate it right away. */
+export function buyGreyCar(s: GameState, rand = Math.random): Result {
+  if (s.garage.length >= garageCapacity(s)) return { state: s, error: "Гараж заполнен" };
+  const car = randomCar(rand, rand() < 0.1);
+  const price = Math.round((carValue(car) * 0.5) / 1000) * 1000;
+  if (s.money < price) return { state: s, error: `Нужно ${fmt(price)}` };
+  if (rand() < 0.25) return { state: { ...s, money: s.money - price }, message: `Полиция изъяла ${car.name}. Минус ${fmt(price)}` };
+  return { state: addXp({ ...s, money: s.money - price, garage: [...s.garage, { ...car, boughtFor: price }] }, 150), message: `Взял серую ${car.name} за ${fmt(price)}` };
+}
+
+/** Fence buys any car at 100% of value; 15% chance of a fine of 20% of value. */
+export function sellToFence(s: GameState, carId: string, rand = Math.random): Result {
+  const car = s.garage.find((c) => c.id === carId);
+  if (!car) return { state: s, error: "Машина не найдена" };
+  const r = sellCar(s, carId, carValue(car));
+  if (rand() < 0.15) {
+    const amount = Math.round(carValue(car) * 0.2);
+    return { state: { ...r.state, fines: [...r.state.fines, { id: uid(), reason: "Сделка со скупщиком", amount }] }, message: `${r.message}. Но пришёл штраф ${fmt(amount)}` };
+  }
+  return r;
+}
+
+/** Roll back mileage by half: 50 000 ₽; 20% chance of a 100 000 ₽ fine. */
+export const ROLLBACK_COST = 50_000;
+export function rollbackMileage(s: GameState, carId: string, rand = Math.random): Result {
+  const car = s.garage.find((c) => c.id === carId);
+  if (!car) return { state: s, error: "Машина не найдена" };
+  if (car.mileage < 20_000) return { state: s, error: "Пробег и так маленький" };
+  if (s.money < ROLLBACK_COST) return { state: s, error: "Не хватает денег" };
+  let next: GameState = { ...s, money: s.money - ROLLBACK_COST, garage: s.garage.map((c) => (c.id === carId ? { ...c, mileage: Math.round(c.mileage / 2000) * 1000 } : c)) };
+  if (rand() < 0.2) {
+    next = { ...next, fines: [...next.fines, { id: uid(), reason: "Скрутка пробега", amount: 100_000 }] };
+    return { state: next, message: "Пробег скручен, но вас спалили — штраф 100 000 ₽" };
+  }
+  return { state: next, message: `Пробег ${car.name} скручен вдвое` };
+}
+
+// ============= Пригон авто =============
+export type ImportOrder = { id: string; car: Car; price: number; endAt: number };
+export const IMPORT_SECONDS = 45;
+
+/** Order a car of the given origin at 70% of its value; it arrives in 45 s. */
+export function orderImport(s: GameState, origin: CarModel["origin"], rand = Math.random, now = Date.now()): Result {
+  const pool = CAR_MODELS.filter((m) => m.origin === origin && !m.rare);
+  const m = pool[Math.floor(rand() * pool.length)]!;
+  const year = CURRENT_YEAR - Math.floor(rand() * 8);
+  const car: Car = { id: uid(), modelId: m.id, name: m.name, year, mileage: Math.round(((CURRENT_YEAR - year) * 12_000) / 1000) * 1000, condition: 70 + Math.floor(rand() * 30) };
+  const price = Math.round((carValue(car) * 0.7) / 1000) * 1000;
+  if (s.money < price) return { state: s, error: `Нужно ${fmt(price)}` };
+  return { state: { ...s, money: s.money - price, imports: [...(s.imports ?? []), { id: uid(), car, price, endAt: now + IMPORT_SECONDS * 1000 }] }, message: `Заказан ${car.name}, едет ${IMPORT_SECONDS} с` };
+}
+
+export const customsDuty = (o: ImportOrder) => Math.round((o.price * 0.15) / 100) * 100;
+
+/** Pay 15% customs to receive an arrived car into the garage. */
+export function clearCustoms(s: GameState, orderId: string, now = Date.now()): Result {
+  const o = (s.imports ?? []).find((x) => x.id === orderId);
+  if (!o) return { state: s, error: "Заказ не найден" };
+  if (now < o.endAt) return { state: s, error: "Машина ещё в пути" };
+  const duty = customsDuty(o);
+  if (s.money < duty) return { state: s, error: "Не хватает на растаможку" };
+  if (s.garage.length >= garageCapacity(s)) return { state: s, error: "Гараж заполнен" };
+  return {
+    state: addXp({ ...s, money: s.money - duty, imports: (s.imports ?? []).filter((x) => x.id !== orderId), garage: [...s.garage, { ...o.car, boughtFor: o.price + duty }] }, 200),
+    message: `${o.car.name} растаможен и в гараже`,
   };
 }

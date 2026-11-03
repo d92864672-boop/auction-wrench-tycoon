@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import {
   ArrowLeft, Building2, CreditCard, Gavel, Globe, Hash, Home, Landmark, LineChart, Package, Plane, Send,
-  Settings, ShieldAlert, ShoppingBag, Smartphone, Store, Tag, TrendingUp, Trophy, User, Wrench, Dices,
+  Settings, ShieldAlert, Ship, Skull, ShoppingBag, Smartphone, Store, Tag, TrendingUp, Trophy, User, Wrench, Dices,
 } from "lucide-react";
 import { useGame } from "@/game/store";
 import { QUESTS, cityOf, fmt, gameDay, level, netWorth, fmtShort } from "@/game/engine";
@@ -10,6 +10,7 @@ import { BankApp, BusinessApp, CasinoApp, RealtyApp, StocksApp } from "./apps-mo
 import { AccessoriesApp, DeliveryApp, QuestsApp, SettingsApp, ShiftApp, TravelApp, UpgradesApp } from "./apps-life";
 import { MessengerApp, OnlineApp, ShopApp } from "./apps-online";
 import { AdminApp } from "./apps-admin";
+import { BlackMarketApp, ImportApp } from "./apps-shadow";
 
 type AppDef = { id: string; name: string; icon: ComponentType<{ className?: string }>; color: string; C: ComponentType };
 
@@ -34,6 +35,8 @@ const APPS: AppDef[] = [
   { id: "online", name: "Онлайн", icon: Globe, color: "icon-cyan", C: OnlineApp },
   { id: "shop", name: "Магазин", icon: ShoppingBag, color: "icon-red", C: ShopApp },
   { id: "messenger", name: "Мессенджер", icon: Send, color: "icon-sky", C: MessengerApp },
+  { id: "black", name: "Чёрный рынок", icon: Skull, color: "icon-dark", C: BlackMarketApp },
+  { id: "import", name: "Пригон", icon: Ship, color: "icon-teal", C: ImportApp },
 ];
 
 const ADMIN_APP: AppDef = { id: "admin", name: "Админка", icon: ShieldAlert, color: "icon-red", C: AdminApp };
