@@ -80,6 +80,9 @@ export function BankApp() {
               <Button size="sm" className="flex-1" onClick={() => act((s) => buyCurrency(s, c.id, a))}>Купить на {fmtShort(a)}</Button>
               <Button size="sm" variant="secondary" className="flex-1" onClick={() => act((s) => sellCurrency(s, c.id))}>Продать всё</Button>
             </div>
+            <div className="flex">
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => act((s) => buyCurrency(s, c.id, s.money))}>Купить на все деньги</Button>
+            </div>
           </Tile>
         ))}
         <p className="text-center text-[11px] text-muted-foreground">Каждый день курс меняется: до +10 коп. или до −27 коп.</p>
