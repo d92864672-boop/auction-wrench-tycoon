@@ -73,6 +73,10 @@ export type GameState = {
   renovated: string[];
   stockHistory: Record<string, number[]>;
   imports?: ImportOrder[] | undefined;
+  /** Exchange rates in kopecks per unit. */
+  fx?: Record<Currency, number> | undefined;
+  /** Whole currency units held. */
+  wallet?: Record<Currency, number> | undefined;
 };
 
 export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt: number; pay: number };
@@ -382,7 +386,7 @@ export function dailyUpdate(s: GameState, rand = Math.random): { state: GameStat
     fines.push({ id: uid(), reason: reasons[Math.floor(rand() * reasons.length)]!, amount: 500 + Math.floor(rand() * 5) * 1000 });
     messages.push("Пришёл новый штраф в Госуслуги");
   }
-  const next: GameState = { ...s, money, deposit: s.deposit + depositInterest, loan, taxDue, fines };
+  const next: GameState = { ...s, money, deposit: s.deposit + depositInterest, loan, taxDue, fines, fx: moveRates(getRates(s), rand) };
   next.listings = generateListings(next, rand);
   return { state: next, messages };
 }
@@ -894,4 +898,38 @@ export function clearCustoms(s: GameState, orderId: string, now = Date.now()): R
     state: addXp({ ...s, imports: (s.imports ?? []).filter((x) => x.id !== orderId), garage: [...s.garage, { ...o.car, boughtFor: o.price + duty }] }, 200),
     message: `${o.car.name} растаможен и в гараже`,
   };
+}
+
+// ============= Currency exchange =============
+export type Currency = "eur" | "kgs";
+export const CURRENCIES: { id: Currency; name: string; flag: string }[] = [
+  { id: "eur", name: "Евро", flag: "🇪🇺" },
+  { id: "kgs", name: "Сом", flag: "🇰🇬" },
+];
+/** Starting rates in kopecks: 1 € = 110 ₽, 1 сом = 1.76 ₽. */
+export const START_RATES: Record<Currency, number> = { eur: 11_000, kgs: 176 };
+export const getRates = (s: GameState) => s.fx ?? START_RATES;
+export const getWallet = (s: GameState): Record<Currency, number> => s.wallet ?? { eur: 0, kgs: 0 };
+/** Each day a rate changes by −27…+10 kopecks (never below 1 kopeck). */
+export function moveRates(r: Record<Currency, number>, rand = Math.random): Record<Currency, number> {
+  const step = (v: number) => Math.max(1, v + Math.floor(rand() * 38) - 27);
+  return { eur: step(r.eur), kgs: step(r.kgs) };
+}
+export const fmtRate = (kop: number) => `${(kop / 100).toFixed(2).replace(".", ",")} ₽`;
+/** Spend `rub` rubles to buy whole units of currency. */
+export function buyCurrency(s: GameState, c: Currency, rub: number): Result {
+  const rate = getRates(s)[c];
+  const units = Math.floor((rub * 100) / rate);
+  if (units <= 0) return { state: s, error: "Сумма слишком мала" };
+  const cost = Math.ceil((units * rate) / 100);
+  if (s.money < cost) return { state: s, error: "Не хватает денег" };
+  const w = getWallet(s);
+  return { state: { ...s, money: s.money - cost, wallet: { ...w, [c]: w[c] + units } }, message: `Куплено ${units.toLocaleString("ru-RU")} за ${fmt(cost)}` };
+}
+/** Sell all held units of a currency back to rubles. */
+export function sellCurrency(s: GameState, c: Currency): Result {
+  const w = getWallet(s);
+  if (w[c] <= 0) return { state: s, error: "Нечего продавать" };
+  const got = Math.floor((w[c] * getRates(s)[c]) / 100);
+  return { state: { ...s, money: s.money + got, wallet: { ...w, [c]: 0 } }, message: `Продано за ${fmt(got)}` };
 }

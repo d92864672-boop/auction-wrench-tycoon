@@ -46,3 +46,19 @@ describe("workshop services", () => {
     expect(Math.abs(cv(done) - cv(car) * 1.08)).toBeLessThan(2);
   });
 });
+
+import { START_RATES, moveRates, buyCurrency } from "@/game/engine";
+describe("currency exchange", () => {
+  it("starts at 110 ₽ per euro and 1.76 ₽ per som", () => {
+    expect(START_RATES).toEqual({ eur: 11_000, kgs: 176 });
+  });
+  it("daily change is between −27 and +10 kopecks", () => {
+    expect(moveRates(START_RATES, () => 0).eur).toBe(11_000 - 27);
+    expect(moveRates(START_RATES, () => 0.9999).eur).toBe(11_000 + 10);
+  });
+  it("1 100 ₽ buys 10 euro", () => {
+    const r = buyCurrency({ ...newGame(), money: 1100 }, "eur", 1100).state;
+    expect(r.wallet?.eur).toBe(10);
+    expect(r.money).toBe(0);
+  });
+});
