@@ -7,6 +7,12 @@ import { useGame } from "@/game/store";
 import {
   DAILY_BONUS_PER_LEVEL,
   WHEEL,
+  CURRENCIES,
+  buyCurrency,
+  sellCurrency,
+  getRates,
+  getWallet,
+  fmtRate,
   adCampaign,
   adCampaignCost,
   claimDailyBonus,
@@ -62,6 +68,21 @@ export function BankApp() {
           <Button className="flex-1" onClick={() => act((s) => (s.money < a || !a ? { state: s, error: "Не хватает денег" } : { state: { ...s, money: s.money - a, deposit: s.deposit + a }, message: "Положено на вклад" }))}>Положить</Button>
           <Button className="flex-1" variant="secondary" onClick={() => act((s) => (s.deposit < a || !a ? { state: s, error: "На вкладе меньше" } : { state: { ...s, money: s.money + a, deposit: s.deposit - a }, message: "Снято со вклада" }))}>Снять</Button>
         </div>
+      </Section>
+      <Section title="💱 Обмен валюты">
+        {CURRENCIES.map((c) => (
+          <Tile key={c.id} className="space-y-2">
+            <div className="flex justify-between gap-2">
+              <p className="font-semibold">{c.flag} {c.name} · {fmtRate(getRates(state)[c.id])}</p>
+              <p className="text-xs text-muted-foreground">У тебя: {getWallet(state)[c.id].toLocaleString("ru-RU")}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1" onClick={() => act((s) => buyCurrency(s, c.id, a))}>Купить на {fmtShort(a)}</Button>
+              <Button size="sm" variant="secondary" className="flex-1" onClick={() => act((s) => sellCurrency(s, c.id))}>Продать всё</Button>
+            </div>
+          </Tile>
+        ))}
+        <p className="text-center text-[11px] text-muted-foreground">Каждый день курс меняется: до +10 коп. или до −27 коп.</p>
       </Section>
       <Section title="Кредит · 2% в день">
         <div className="grid grid-cols-2 gap-2">
