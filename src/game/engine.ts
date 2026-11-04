@@ -859,8 +859,10 @@ export function rollbackMileage(s: GameState, carId: string, rand = Math.random)
 }
 
 // ============= Пригон авто =============
-export type ImportOrder = { id: string; car: Car; price: number; endAt: number };
-export const IMPORT_SECONDS = 45;
+export type ImportOrder = { id: string; car: Car; price: number; endAt: number; customsEndAt?: number };
+export const IMPORT_SECONDS = 300;
+export const CUSTOMS_SECONDS = 60;
+export const MAX_IMPORTS = 3;
 
 /** Order a car of the given origin at 70% of its value; it arrives in 45 s. */
 export function orderImport(s: GameState, origin: CarModel["origin"], rand = Math.random, now = Date.now()): Result {
@@ -869,8 +871,9 @@ export function orderImport(s: GameState, origin: CarModel["origin"], rand = Mat
   const year = CURRENT_YEAR - Math.floor(rand() * 8);
   const car: Car = { id: uid(), modelId: m.id, name: m.name, year, mileage: Math.round(((CURRENT_YEAR - year) * 12_000) / 1000) * 1000, condition: 70 + Math.floor(rand() * 30) };
   const price = Math.round((carValue(car) * 0.7) / 1000) * 1000;
+  if ((s.imports ?? []).length >= MAX_IMPORTS) return { state: s, error: `Максимум ${MAX_IMPORTS} заказа одновременно` };
   if (s.money < price) return { state: s, error: `Нужно ${fmt(price)}` };
-  return { state: { ...s, money: s.money - price, imports: [...(s.imports ?? []), { id: uid(), car, price, endAt: now + IMPORT_SECONDS * 1000 }] }, message: `Заказан ${car.name}, едет ${IMPORT_SECONDS} с` };
+  return { state: { ...s, money: s.money - price, imports: [...(s.imports ?? []), { id: uid(), car, price, endAt: now + IMPORT_SECONDS * 1000 }] }, message: `Заказан ${car.name}, едет 5 минут` };
 }
 
 export const customsDuty = (o: ImportOrder) => Math.round((o.price * 0.15) / 100) * 100;
@@ -881,10 +884,14 @@ export function clearCustoms(s: GameState, orderId: string, now = Date.now()): R
   if (!o) return { state: s, error: "Заказ не найден" };
   if (now < o.endAt) return { state: s, error: "Машина ещё в пути" };
   const duty = customsDuty(o);
-  if (s.money < duty) return { state: s, error: "Не хватает на растаможку" };
+  if (o.customsEndAt === undefined) {
+    if (s.money < duty) return { state: s, error: "Не хватает на растаможку" };
+    return { state: { ...s, money: s.money - duty, imports: (s.imports ?? []).map((x) => (x.id === orderId ? { ...x, customsEndAt: now + CUSTOMS_SECONDS * 1000 } : x)) }, message: "Растаможка началась, 1 минута" };
+  }
+  if (now < o.customsEndAt) return { state: s, error: "Растаможка ещё идёт" };
   if (s.garage.length >= garageCapacity(s)) return { state: s, error: "Гараж заполнен" };
   return {
-    state: addXp({ ...s, money: s.money - duty, imports: (s.imports ?? []).filter((x) => x.id !== orderId), garage: [...s.garage, { ...o.car, boughtFor: o.price + duty }] }, 200),
+    state: addXp({ ...s, imports: (s.imports ?? []).filter((x) => x.id !== orderId), garage: [...s.garage, { ...o.car, boughtFor: o.price + duty }] }, 200),
     message: `${o.car.name} растаможен и в гараже`,
   };
 }
