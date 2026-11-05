@@ -39,6 +39,7 @@ export function AdminApp() {
         <TabsTrigger value="me" className="flex-1">Себе</TabsTrigger>
         <TabsTrigger value="players" className="flex-1">Игроки</TabsTrigger>
         <TabsTrigger value="mod" className="flex-1">Модерация</TabsTrigger>
+        <TabsTrigger value="pay" className="flex-1">Оплаты</TabsTrigger>
       </TabsList>
       <TabsContent value="me" className="mt-3">
         <SelfTab userId={user.id} deliver={checkGrants} />
@@ -48,6 +49,9 @@ export function AdminApp() {
       </TabsContent>
       <TabsContent value="mod" className="mt-3">
         <ModTab />
+      </TabsContent>
+      <TabsContent value="pay" className="mt-3">
+        <PaymentsTab />
       </TabsContent>
     </Tabs>
   );
@@ -292,6 +296,32 @@ function ModTab() {
           </Tile>
         ))}
       </Section>
+    </div>
+  );
+}
+
+type PayReq = { id: string; user_id: string; item_id: string; price_som: number; payer_note: string; created_at: string };
+function PaymentsTab() {
+  const [list, setList] = useState<PayReq[]>([]);
+  const load = async () => {
+    const { data } = await supabase.from("payment_requests").select("*").eq("status", "pending").order("created_at");
+    setList((data ?? []) as PayReq[]);
+  };
+  useEffect(() => { void load(); }, []);
+  return (
+    <div className="space-y-2">
+      <Button variant="secondary" className="w-full" onClick={load}>Обновить</Button>
+      {list.length === 0 && <Empty>Новых заявок нет</Empty>}
+      {list.map((r) => (
+        <Tile key={r.id} className="space-y-2">
+          <p className="font-semibold">{SHOP_ITEMS.find((i) => i.id === r.item_id)?.name ?? r.item_id} · {r.price_som} сом</p>
+          <p className="text-xs text-muted-foreground">Отправитель: {r.payer_note} · {new Date(r.created_at).toLocaleString("ru-RU")}</p>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1" onClick={async () => { if (await run(supabase.rpc("admin_resolve_payment", { _id: r.id, _approve: true }), "Товар выдан")) load(); }}>Подтвердить</Button>
+            <Button size="sm" variant="destructive" className="flex-1" onClick={async () => { if (await run(supabase.rpc("admin_resolve_payment", { _id: r.id, _approve: false }), "Отклонено")) load(); }}>Отклонить</Button>
+          </div>
+        </Tile>
+      ))}
     </div>
   );
 }
