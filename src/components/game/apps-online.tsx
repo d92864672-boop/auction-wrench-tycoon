@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useGame } from "@/game/store";
 import { carValue, fmt, fmtShort, garageCapacity, type Car } from "@/game/engine";
-import { SHOP_ITEMS } from "@/game/shop";
+import { SHOP_ITEMS, type ShopItem } from "@/game/shop";
+import qrAsset from "@/assets/mbank-qr.jpg.asset.json";
 import { Empty, Section, Tile } from "./ui";
 
 function SignInCta({ text }: { text: string }) {
@@ -232,11 +233,35 @@ export function OnlineApp() {
 export function ShopApp() {
   const { user, checkGrants } = useGame();
   const [checking, setChecking] = useState(false);
+  const [buying, setBuying] = useState<ShopItem | null>(null);
+  const [note, setNote] = useState("");
+  if (buying && user)
+    return (
+      <div className="space-y-3">
+        <Tile className="border-destructive space-y-1">
+          <p className="font-semibold">⚠️ Принимается только в сомах</p>
+          <p className="text-sm">Если другая валюта, то вы не сможете купить. Когда купите, ожидайте ответа администратора — он вам выдаст ваш товар.</p>
+        </Tile>
+        <Tile className="space-y-2 text-center">
+          <p className="font-semibold">{buying.name} · {buying.priceRub} сом</p>
+          <img src={qrAsset.url} alt="QR для оплаты MBank" className="mx-auto w-56 rounded-lg" />
+          <p className="text-xs text-muted-foreground">Отсканируй QR в MBank и переведи ровно {buying.priceRub} сом</p>
+        </Tile>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Имя отправителя или последние цифры номера" />
+        <Button className="w-full" disabled={!note.trim()} onClick={async () => {
+          const { error } = await supabase.from("payment_requests").insert({ user_id: user.id, item_id: buying.id, price_som: buying.priceRub, payer_note: note.trim() });
+          if (error) return toast.error(error.message);
+          toast.success("Заявка отправлена. Ожидайте ответа администратора");
+          setBuying(null); setNote("");
+        }}>Я оплатил</Button>
+        <Button variant="ghost" className="w-full" onClick={() => setBuying(null)}>Назад</Button>
+      </div>
+    );
   return (
     <div className="space-y-3">
       <Tile className="icon-purple border-0 p-4">
         <p className="font-display text-lg font-semibold">Магазин wertперекуп</p>
-        <p className="mt-1 text-sm opacity-90">Покупки приходят в игру автоматически сразу после оплаты.</p>
+        <p className="mt-1 text-sm opacity-90">Оплата только в сомах по QR. Товар выдаёт администратор после проверки.</p>
       </Tile>
       {!user && <SignInCta text="Войди, чтобы покупки привязались к твоему аккаунту." />}
       {SHOP_ITEMS.map((i) => (
@@ -247,8 +272,8 @@ export function ShopApp() {
             </p>
             <p className="text-xs text-muted-foreground">{i.desc}</p>
           </div>
-          <Button size="sm" disabled={!user} onClick={() => toast("Оплата скоро заработает — магазин подключается")}>
-            {i.priceRub} ₽
+          <Button size="sm" disabled={!user} onClick={() => setBuying(i)}>
+            {i.priceRub} сом
           </Button>
         </Tile>
       ))}
