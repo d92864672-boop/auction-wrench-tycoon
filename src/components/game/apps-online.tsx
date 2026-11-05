@@ -250,7 +250,7 @@ export function ShopApp() {
         <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Имя отправителя или последние цифры номера" />
         <Button className="w-full" disabled={!note.trim()} onClick={async () => {
           const { error } = await supabase.from("payment_requests").insert({ user_id: user.id, item_id: buying.id, price_som: buying.priceRub, payer_note: note.trim() });
-          if (error) return toast.error(error.message);
+          if (error) { toast.error(error.message); return; }
           toast.success("Заявка отправлена. Ожидайте ответа администратора");
           setBuying(null); setNote("");
         }}>Я оплатил</Button>
