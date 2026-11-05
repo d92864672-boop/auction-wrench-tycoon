@@ -29,7 +29,7 @@ function Car({ ctl, color, speedRef }: { ctl: React.RefObject<Controls>; color: 
     <group ref={g}>
       <mesh position={[0, 0.6, 0]} castShadow><boxGeometry args={[1.9, 0.6, 4.2]} /><meshStandardMaterial color={color} metalness={0.6} roughness={0.3} /></mesh>
       <mesh position={[0, 1.15, -0.3]} castShadow><boxGeometry args={[1.6, 0.5, 2]} /><meshStandardMaterial color="#1b2430" metalness={0.8} roughness={0.1} /></mesh>
-      {[[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]].map(([x, z], i) => (
+      {([[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]] as const).map(([x, z], i) => (
         <mesh key={i} position={[x, 0.35, z]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.35, 0.35, 0.3, 16]} /><meshStandardMaterial color="#111" /></mesh>
       ))}
       <mesh position={[0, 0.65, 2.11]}><boxGeometry args={[1.5, 0.15, 0.02]} /><meshStandardMaterial color="#fff6c0" emissive="#fff6c0" emissiveIntensity={1} /></mesh>
