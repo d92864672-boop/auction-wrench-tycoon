@@ -22,6 +22,13 @@
       "when": 1793594256846,
       "tag": "0002_admin_v2_timed_bans_mutes_promos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793850177256,
+      "tag": "0003_manual_som_payments",
+      "breakpoints": true
     }
   ]
 }

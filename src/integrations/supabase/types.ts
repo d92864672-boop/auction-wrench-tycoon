@@ -161,6 +161,36 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_requests: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          payer_note: string
+          price_som: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          payer_note?: string
+          price_som: number
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          payer_note?: string
+          price_som?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -326,6 +356,10 @@ export type Database = {
         Returns: undefined
       }
       admin_reset_player: { Args: { _user_id: string }; Returns: undefined }
+      admin_resolve_payment: {
+        Args: { _approve: boolean; _id: string }
+        Returns: undefined
+      }
       admin_server_stats: { Args: never; Returns: Json }
       admin_set_nickname: {
         Args: { _nickname: string; _user_id: string }
