@@ -16,3 +16,5 @@
 - Phone apps are in-page screens registered in `src/components/game/Phone.tsx`, not routes — the game is one phone UI.
 - Admin powers run only through SECURITY DEFINER `admin_*` SQL functions that call `assert_admin()` (role in `user_roles`); money/item/reset effects reach players as `item_grants` rows — client is never trusted for admin checks.
 - Bans live in `bans`; RLS blocks banned users from chat, market, profile and save updates, and the phone shows a block screen.
+- Transient driving physics live in `src/game/drive-physics.ts`, separate from saved economy rules; +Z is forward and negative yaw turns left, so keyboard and touch share one control mapping.
+- Driving has dev-only `window.__drive.state` and `sim(seconds)` for fixed-step checks; `[data-scene-ready="1"]` is set only after a real model frame draws, so browser verification never mistakes loading for success.

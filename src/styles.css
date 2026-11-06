@@ -53,6 +53,15 @@
 
 /* Dark "phone" theme for wertперекуп */
 :root {
+  --drive-sky: #add8ec;
+  --drive-asphalt: #50575b;
+  --drive-line: #f0e7bd;
+  --drive-grass: #709a68;
+  --drive-building: #c7ced1;
+  --drive-window: #4b737f;
+  --drive-tyre: #25292c;
+  --drive-sun: #fff6e2;
+  --drive-paint: #c0392b;
   --radius: 1rem;
   --background: oklch(0.12 0.03 285);
   --foreground: oklch(0.98 0.005 285);
