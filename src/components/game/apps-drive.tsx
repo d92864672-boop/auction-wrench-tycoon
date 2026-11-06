@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGame } from "@/game/store";
@@ -59,7 +60,7 @@ function Drive({ car, mode, setMode, exit }: { car: Car; mode: DriveMode; setMod
       onPointerUp={() => { ctl.current[key] = false; }} onPointerCancel={() => { ctl.current[key] = false; }} onLostPointerCapture={() => { ctl.current[key] = false; }}
     >{icon}</Button>
   );
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-background">
       <ClientOnly fallback={<Empty>Загрузка…</Empty>}><Suspense fallback={<Empty>Загрузка…</Empty>}>
         <DriveScene ctl={ctl} modeRef={modeRef} speedRef={speedRef} slipRef={slipRef} resetRef={resetRef} />
@@ -83,6 +84,6 @@ function Drive({ car, mode, setMode, exit }: { car: Car; mode: DriveMode; setMod
         {pad("drift", "Дрифт", "ДРИФТ")}
         <div className="flex flex-col gap-2">{pad("up", "Газ", <ArrowUp />)}{pad("down", "Тормоз / задний ход", <ArrowDown />)}</div>
       </div>
-    </div>
+    </div>, document.body
   );
 }
