@@ -3,11 +3,12 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Lightformer, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import carAsset from "@/assets/models/drive-car.glb.asset.json";
-import { clearControls, newDrive, stepDrive, type Controls, type DriveMode } from "@/game/drive-physics";
+import { newDrive, stepDrive, type Controls, type DriveMode } from "@/game/drive-physics";
 
 function palette() {
   const css = getComputedStyle(document.documentElement);
-  return Object.fromEntries(["sky", "asphalt", "line", "grass", "building", "window", "tyre", "sun", "paint"].map(key => [key, css.getPropertyValue(`--drive-${key}`).trim()]));
+  const read = (key: string) => css.getPropertyValue(`--drive-${key}`).trim();
+  return { sky: read("sky"), asphalt: read("asphalt"), line: read("line"), grass: read("grass"), building: read("building"), window: read("window"), sun: read("sun") };
 }
 type SceneProps = { ctl: RefObject<Controls>; modeRef: RefObject<DriveMode>; speedRef: RefObject<HTMLSpanElement | null>; slipRef: RefObject<HTMLSpanElement | null>; resetRef: RefObject<boolean> };
 function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
@@ -58,7 +59,7 @@ function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
   });
   return <group ref={g}><primitive object={model} /></group>;
 }
-function City({ p }: { p: Record<string, string> }) {
+function City({ p }: { p: ReturnType<typeof palette> }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas"); canvas.width = canvas.height = 256;
     const ctx = canvas.getContext("2d");
