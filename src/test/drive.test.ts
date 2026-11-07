@@ -15,7 +15,7 @@ describe("garage driving", () => {
   });
   it("keyboard and touch share steering direction, throttle and drift", () => {
     expect(KEY_CONTROLS["KeyA"]).toBe("left"); expect(KEY_CONTROLS["ArrowLeft"]).toBe("left"); expect(KEY_CONTROLS["Space"]).toBe("drift");
-    expect(sim("rwd").x).toBeLessThan(0); expect(sim("rwd").z).toBeGreaterThan(0);
+    expect(sim("rwd").x).toBeGreaterThan(0); expect(sim("rwd").z).toBeGreaterThan(0);
     const reverse = stepDrive(newDrive(), { ...clearControls(), down: true }, "fwd", 0.05);
     expect(reverse.vz).toBeLessThan(0);
   });

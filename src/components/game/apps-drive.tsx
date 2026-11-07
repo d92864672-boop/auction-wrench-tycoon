@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useGame } from "@/game/store";
 import type { Car } from "@/game/engine";
 import { clearControls, DRIVE_MODES, KEY_CONTROLS, type Controls, type DriveMode } from "@/game/drive-physics";
+import { driveSpec } from "@/game/drive-cars";
 import { Empty, Tile } from "./ui";
 
 const DriveScene = lazy(() => import("./drive-scene"));
@@ -32,13 +33,17 @@ export function DriveApp() {
       {state.garage.length === 0 && <Empty>Гараж пуст — катайся на тестовой машине или купи свою в Перекупе</Empty>}
       {state.garage.length === 0 && (
         <Tile className="flex items-center justify-between gap-2">
-          <span className="min-w-0 text-sm">{DEMO_CAR.name} {DEMO_CAR.year}</span>
+          <span className="min-w-0 text-sm">{DEMO_CAR.name} {DEMO_CAR.year}
+            <span className="block text-xs text-muted-foreground">макс. {driveSpec(DEMO_CAR.modelId).topSpeedKmh} км/ч</span>
+          </span>
           <Button size="sm" onClick={() => setCar(DEMO_CAR)}>Кататься</Button>
         </Tile>
       )}
       {state.garage.map((c) => (
         <Tile key={c.id} className="flex items-center justify-between gap-2">
-          <span className="min-w-0 text-sm">{c.name} {c.year}</span>
+          <span className="min-w-0 text-sm">{c.name} {c.year}
+            <span className="block text-xs text-muted-foreground">макс. {driveSpec(c.modelId).topSpeedKmh} км/ч</span>
+          </span>
           <Button size="sm" disabled={!!c.inService} onClick={() => setCar(c)}>{c.inService ? "В ремонте" : "Кататься"}</Button>
         </Tile>
       ))}
@@ -80,12 +85,13 @@ function Drive({ car, mode, setMode, exit }: { car: Car; mode: DriveMode; setMod
   return createPortal(
     <div className="fixed inset-0 z-50 bg-background">
       <ClientOnly fallback={<Empty>Загрузка…</Empty>}><Suspense fallback={<Empty>Загрузка…</Empty>}>
-        <DriveScene ctl={ctl} modeRef={modeRef} speedRef={speedRef} slipRef={slipRef} resetRef={resetRef} />
+        <DriveScene car={car} ctl={ctl} modeRef={modeRef} speedRef={speedRef} slipRef={slipRef} resetRef={resetRef} />
       </Suspense></ClientOnly>
       <div className="absolute inset-x-3 top-3 mx-auto max-w-lg space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 rounded-lg bg-background/80 px-3 py-2 backdrop-blur">
             <p className="truncate text-xs">{car.name} · {car.year}</p>
+            <p className="text-xs text-muted-foreground">макс. {driveSpec(car.modelId).topSpeedKmh} км/ч</p>
             <p className="font-display text-2xl tabular-nums"><span ref={speedRef}>0</span><span className="ml-2 text-xs text-muted-foreground">км/ч</span></p>
             <span ref={slipRef} className="text-xs text-warning">Сцепление</span>
           </div>
