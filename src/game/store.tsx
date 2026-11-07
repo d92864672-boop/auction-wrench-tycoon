@@ -58,6 +58,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [cloudReady, setCloudReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ban, setBan] = useState<{ reason: string } | null>(null);
+  const [socialSnap, setSocialSnap] = useState<Snapshot | null>(null);
+  const [socialError, setSocialError] = useState<string | null>(null);
 
   const set = useCallback((fn: (s: GameState) => GameState) => setState((s) => fn(s)), []);
 
