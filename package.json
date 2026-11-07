@@ -14,14 +14,6 @@
     "test:watch": "vitest"
   },
   "overrides": {
-    "minimatch": {
-      "brace-expansion": "1.1.21"
-    },
-    "@typescript-eslint/typescript-estree": {
-      "minimatch": {
-        "brace-expansion": "5.0.12"
-      }
-    },
     "zod": "4.6.6",
     "rolldown": "1.2.1",
     "shell-quote": "1.11.0",
