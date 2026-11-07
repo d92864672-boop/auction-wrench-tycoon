@@ -204,7 +204,7 @@ export async function sendChat(input: { id: string; nickname?: string; body: str
     p.lastSeen = now();
     if (input.nickname) p.nickname = clean(input.nickname, 20) || p.nickname;
   }
-  data.chat.push({ id: uid("msg"), playerId: id, nickname: p?.nickname ?? clean(input.nickname, 20) || "Игрок", body, at: now() });
+  data.chat.push({ id: uid("msg"), playerId: id, nickname: p?.nickname ?? (clean(input.nickname, 20) || "Игрок"), body, at: now() });
   data.chat = data.chat.slice(-MAX_CHAT);
   scheduleSave();
   return snapshot(id);
@@ -234,7 +234,7 @@ export async function createOrder(input: {
   data.orders.unshift({
     id: uid("ord"),
     playerId: id,
-    nickname: p?.nickname ?? clean(input.nickname, 20) || "Игрок",
+    nickname: p?.nickname ?? (clean(input.nickname, 20) || "Игрок"),
     itemId: clean(input.itemId, 40),
     itemName: clean(input.itemName, 60) || clean(input.itemId, 40),
     priceSom: num(input.priceSom, 1_000_000),
