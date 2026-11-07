@@ -131,25 +131,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return count;
   }, [user]);
 
-  // Admin role + ban status
+  // Доступ владельца: d92864672@gmail.com. Клиент показывает админку,
+  // сервер (/api/social/admin) всё равно проверяет токен и email сам.
   useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      setBan(null);
-      return;
-    }
     let cancelled = false;
     const check = async () => {
-      const [{ data: admin }, { data: b }] = await Promise.all([
-        supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
-        supabase.from("bans").select("reason").eq("user_id", user.id).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      setIsAdmin(Boolean(admin));
-      setBan(b ? { reason: b.reason } : null);
+      const ownerLocal = isOwnerEmail(user?.email);
+      let ownerServer = false;
+      if (user) {
+        try {
+          ownerServer = (await social.whoami()).owner;
+        } catch {
+          ownerServer = false;
+        }
+      }
+      if (!cancelled) setIsAdmin(ownerLocal || ownerServer);
     };
-    check();
-    const id = setInterval(check, 30_000);
+    void check();
+    const id = setInterval(check, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
