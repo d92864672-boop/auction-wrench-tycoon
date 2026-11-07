@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGame } from "@/game/store";
+import { signInWithGoogle } from "@/lib/google-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   TAP_PAY_PER_LEVEL,
@@ -313,8 +315,18 @@ export function SettingsApp() {
         ) : (
           <Tile className="space-y-2">
             <p className="text-sm text-muted-foreground">Войди, чтобы играть онлайн: рейтинг, чат, барахолка и покупки в магазине.</p>
-            <Button asChild className="w-full">
-              <Link to="/auth">Войти или создать аккаунт</Link>
+            <Button
+              className="w-full"
+              onClick={async () => {
+                const result = await signInWithGoogle();
+                if (!result.started) toast.error(result.message ?? "Не удалось войти через Google");
+              }}
+            >
+              <span aria-hidden className="mr-2 font-display text-base font-bold">G</span>
+              Продолжить с Google
+            </Button>
+            <Button variant="secondary" asChild className="w-full">
+              <Link to="/auth">Войти по почте или создать аккаунт</Link>
             </Button>
           </Tile>
         )}
