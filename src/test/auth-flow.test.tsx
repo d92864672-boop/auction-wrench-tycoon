@@ -21,6 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       signUp: mocks.signUp,
       signInWithOtp: mocks.signInWithOtp,
       verifyOtp: mocks.verifyOtp,
+      updateUser: mocks.updateUser,
       getSession: mocks.getSession,
     },
   },
@@ -63,8 +64,9 @@ describe("Вход в игру", () => {
 
     await waitFor(() => expect(mocks.signInWithOtp).toHaveBeenCalledTimes(1));
     expect(mocks.signInWithOtp.mock.calls[0][0]).toMatchObject({ email: "player@wert.ru" });
-    // Пароль сохраняется при первом входе, но пускает именно код из письма.
-    expect(mocks.signUp.mock.calls[0][0]).toMatchObject({ email: "player@wert.ru" });
+    // Письмо с кодом уходит сразу: регистрация и пароль — уже после кода.
+    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(mocks.updateUser).not.toHaveBeenCalled();
 
     expect(await screen.findByText(/Код из письма/)).toBeTruthy();
     expect(container.querySelector('input[inputmode="numeric"]')).toBeTruthy();
@@ -74,6 +76,7 @@ describe("Вход в игру", () => {
     const { container } = render(<AuthPage />);
 
     fireEvent.change(field(container, 'input[type="email"]'), { target: { value: "player@wert.ru" } });
+    fireEvent.change(field(container, 'input[type="password"]'), { target: { value: "Wq7-Rt9-mZ4-kLp2" } });
     fireEvent.click(screen.getByRole("button", { name: /Получить код на почту/ }));
     await screen.findByText(/Код из письма/);
 
@@ -82,6 +85,8 @@ describe("Вход в игру", () => {
 
     await waitFor(() => expect(mocks.verifyOtp).toHaveBeenCalledTimes(1));
     expect(mocks.verifyOtp.mock.calls[0][0]).toMatchObject({ email: "player@wert.ru", token: "123456", type: "email" });
+    // Пароль применяется после подтверждения кодом: им можно войти без кода.
+    await waitFor(() => expect(mocks.updateUser).toHaveBeenCalledWith({ password: "Wq7-Rt9-mZ4-kLp2" }));
   });
 
   it("не отправляет код на некорректную почту", async () => {
