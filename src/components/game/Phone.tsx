@@ -52,7 +52,7 @@ function clock(min: number) {
 }
 
 export function Phone() {
-  const { state, isAdmin, ban } = useGame();
+  const { state, ban } = useGame();
   // Пункт «Админка» виден всем, чтобы владелец сразу её нашёл.
   // Данные панели всё равно отдаёт сервер только владельцу (d92864672@gmail.com).
   const apps = [...APPS, ADMIN_APP];
