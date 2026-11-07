@@ -39,8 +39,11 @@ export function frontWheelSteer(controls: Controls, max = 0.45): number {
 
 export function stepDrive(s: DriveState, c: Controls, mode: DriveMode, delta: number, limits?: DriveLimits): DriveState {
   const dt = Math.max(0, Math.min(delta, 0.05)), p = DRIVE_TUNING[mode];
-  const accel = Math.max(1, limits?.accel ?? p.accel);
   const topSpeed = Math.max(1, limits?.max ?? p.max);
+  // Аркадный разгон: до своего максимума машина доезжает примерно за 2.4 с,
+  // поэтому 148 км/ч и 326 км/ч реально достижимы на карте. Профиль может
+  // сделать разгон резвее, но не более вялым.
+  const accel = Math.max(1, limits?.accel ?? p.accel, topSpeed / 2.4);
   let forward = s.vx * Math.sin(s.yaw) + s.vz * Math.cos(s.yaw);
   if (c.up) forward += accel * dt;
   if (c.down) forward -= (forward > 0.3 ? 25 : accel * 0.65) * dt;
