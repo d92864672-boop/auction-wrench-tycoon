@@ -249,17 +249,23 @@ export function BlackShopApp() {
             ))}
           </div>
 
-          <div className="flex gap-1.5">
-            <Input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send(text)}
-              placeholder="Сообщение дилеру"
-              className="wb-input h-9"
-            />
-            <Button size="sm" className="wb-btn h-9 px-3" aria-label="Отправить" onClick={() => send(text)}>
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="space-y-1">
+            <label htmlFor="wb-chat-msg" className="wb-field-label block">
+              Сообщение дилеру
+            </label>
+            <div className="flex gap-1.5">
+              <Input
+                id="wb-chat-msg"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send(text)}
+                placeholder="Сообщение дилеру"
+                className="wb-input h-9"
+              />
+              <Button size="sm" className="wb-btn h-9 px-3" aria-label="Отправить" onClick={() => send(text)}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex gap-1.5">
             <Input
