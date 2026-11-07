@@ -13,6 +13,7 @@ import {
   type GameState,
   type Result,
 } from "./engine";
+import { isOwnerEmail, social, type AdminOverview, type Snapshot } from "./social";
 
 const LOCAL_KEY = "wert-save-v1";
 
@@ -28,6 +29,15 @@ type Ctx = {
   reset: () => void;
   isAdmin: boolean;
   ban: { reason: string } | null;
+  /** Онлайн-состояние: реальные игроки, рейтинг по сделкам, чат. */
+  social: Snapshot | null;
+  socialError: string | null;
+  refreshSocial: () => Promise<void>;
+  reportDeal: (title: string, price: number) => Promise<void>;
+  sendChat: (body: string) => Promise<void>;
+  orderItem: (item: { id: string; name: string; priceSom: number; note: string }) => Promise<void>;
+  adminOverview: () => Promise<AdminOverview>;
+  adminAction: (action: Record<string, unknown>) => Promise<string>;
 };
 
 const GameCtx = createContext<Ctx | null>(null);
