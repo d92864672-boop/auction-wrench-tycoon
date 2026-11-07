@@ -1,76 +1,70 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { supabase } from "@/integrations/supabase/client";
 import { useGame } from "@/game/store";
-import { carValue, fmt, fmtShort, garageCapacity, type Car } from "@/game/engine";
+import { fmt, fmtShort } from "@/game/engine";
 import { SHOP_ITEMS, type ShopItem } from "@/game/shop";
 import qrAsset from "@/assets/mbank-qr.jpg.asset.json";
 import { Empty, Section, Tile } from "./ui";
 
-function SignInCta({ text }: { text: string }) {
+function Offline({ error, retry }: { error: string | null; retry: () => void }) {
   return (
-    <Tile className="space-y-3 text-center">
-      <p className="text-sm text-muted-foreground">{text}</p>
-      <Button asChild className="w-full">
-        <Link to="/auth">Войти</Link>
-      </Button>
+    <Tile className="space-y-2 text-center">
+      <p className="text-sm font-semibold">Сервер игроков недоступен</p>
+      <p className="text-xs text-muted-foreground">{error ?? "Пробуем подключиться…"}</p>
+      <Button size="sm" variant="secondary" className="w-full" onClick={retry}>Повторить</Button>
     </Tile>
   );
 }
 
-type Msg = { id: string; user_id: string; nickname: string; body: string; created_at: string };
-
+/** Общий чат живых игроков. */
 export function MessengerApp() {
-  const { user, nickname } = useGame();
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const { social, socialError, sendChat, refreshSocial } = useGame();
   const [text, setText] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
+  const msgs = social?.chat ?? [];
+  const me = social?.me.id;
 
   useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("chat_messages")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50)
-      .then(({ data }) => setMsgs((data ?? []).reverse()));
-    const channel = supabase
-      .channel(`chat-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (p) => {
-        setMsgs((m) => (m.some((x) => x.id === (p.new as Msg).id) ? m : [...m.slice(-99), p.new as Msg]));
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, [msgs.length]);
 
-  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [msgs]);
-
-  if (!user) return <SignInCta text="Общий чат всех игроков доступен после входа." />;
+  if (!social) return <Offline error={socialError} retry={() => void refreshSocial()} />;
 
   const send = async () => {
-    const body = text.trim().slice(0, 300);
+    const body = text.trim();
     if (!body) return;
     setText("");
-    const { error } = await supabase.from("chat_messages").insert({ user_id: user.id, nickname, body });
-    if (error) toast.error("Сообщение не отправилось");
+    try {
+      await sendChat(body);
+    } catch {
+      toast.error("Сообщение не отправилось");
+    }
   };
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-2 pb-3">
-        {msgs.length === 0 && <Empty>Пока тихо. Напиши первым!</Empty>}
+        {msgs.length === 0 && <Empty>Пока тихо. Напиши первым — сообщение увидят все игроки.</Empty>}
         {msgs.map((m) => {
-          const mine = m.user_id === user.id;
+          const mine = m.playerId === me;
           return (
             <div key={m.id} className={mine ? "flex justify-end" : "flex justify-start"}>
-              <div className={mine ? "max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-primary-foreground" : "max-w-[80%] rounded-2xl rounded-bl-sm bg-card px-3 py-2"}>
-                {!mine && <p className="text-[11px] font-semibold text-warning">{m.nickname}</p>}
+              <div
+                className={
+                  mine
+                    ? "max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-primary-foreground"
+                    : "max-w-[80%] rounded-2xl rounded-bl-sm bg-card px-3 py-2"
+                }
+              >
+                {!mine && (
+                  <p className="text-[11px] font-semibold text-warning">
+                    {m.nickname}
+                    {m.admin ? " · админ" : ""}
+                  </p>
+                )}
                 <p className="break-words text-sm">{m.body}</p>
               </div>
             </div>
@@ -79,219 +73,186 @@ export function MessengerApp() {
         <div ref={bottom} />
       </div>
       <form
-        className="sticky bottom-0 flex gap-2 bg-background pt-2"
+        className="sticky bottom-0 space-y-1 bg-background pt-2"
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          void send();
         }}
       >
-        <Input value={text} maxLength={300} onChange={(e) => setText(e.target.value)} placeholder="Сообщение" />
-        <Button type="submit">Отпр.</Button>
+        <label htmlFor="chat-msg" className="wb-field-label block">Сообщение игрокам</label>
+        <div className="flex gap-2">
+          <Input id="chat-msg" value={text} maxLength={300} onChange={(e) => setText(e.target.value)} placeholder="Написать в общий чат" />
+          <Button type="submit">Отпр.</Button>
+        </div>
       </form>
     </div>
   );
 }
 
-type Profile = { id: string; nickname: string; net_worth: number; level: number };
-type ListingRow = { id: string; seller_id: string; seller_nickname: string; car: Car; price: number; status: string };
-
+/** Онлайн: реальные игроки в сети и рейтинг по успешным сделкам. */
 export function OnlineApp() {
-  const { user, state, act, nickname } = useGame();
-  const [top, setTop] = useState<Profile[]>([]);
-  const [listings, setListings] = useState<ListingRow[]>([]);
-  const [sellCar, setSellCar] = useState<string | null>(null);
-  const [price, setPrice] = useState("");
+  const { social, socialError, refreshSocial } = useGame();
+  const online = social?.online ?? [];
+  const rating = social?.rating ?? [];
+  const deals = social?.deals ?? [];
 
-  const load = useCallback(async () => {
-    const [{ data: p }, { data: l }] = await Promise.all([
-      supabase.from("profiles").select("id,nickname,net_worth,level").order("net_worth", { ascending: false }).limit(50),
-      user
-        ? supabase.from("market_listings").select("*").eq("status", "active").order("created_at", { ascending: false }).limit(50)
-        : Promise.resolve({ data: [] }),
-    ]);
-    setTop((p ?? []) as Profile[]);
-    setListings((l ?? []) as unknown as ListingRow[]);
-  }, [user]);
-
-  const collect = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase.rpc("collect_sales");
-    const total = Number(data ?? 0);
-    if (total > 0) act((s) => ({ state: { ...s, money: s.money + total, stats: { ...s.stats, carsSold: s.stats.carsSold + 1 } }, message: `Ваши машины купили: +${fmt(total)}` }));
-  }, [user, act]);
-
-  useEffect(() => {
-    load();
-    collect();
-  }, [load, collect]);
-
-  const buy = async (l: ListingRow) => {
-    if (state.money < l.price) { toast.error("Не хватает денег"); return; }
-    if (state.garage.length >= garageCapacity(state)) { toast.error("Гараж заполнен"); return; }
-    const { error } = await supabase.rpc("buy_listing", { _listing_id: l.id });
-    if (error) {
-      toast.error("Машину уже купили");
-      { load(); return; }
-    }
-    act((s) => ({
-      state: { ...s, money: s.money - l.price, garage: [...s.garage, { ...l.car, id: Math.random().toString(36).slice(2), boughtFor: l.price }], stats: { ...s.stats, carsBought: s.stats.carsBought + 1 } },
-      message: `Куплено у ${l.seller_nickname}: ${l.car.name}`,
-    }));
-    load();
-  };
-
-  const publish = async (car: Car) => {
-    const p = Math.floor(Number(price.replace(/\s/g, "")));
-    if (!user || !p || p <= 0) { toast.error("Укажи цену"); return; }
-    const { error } = await supabase.from("market_listings").insert({ seller_id: user.id, seller_nickname: nickname, car: car as never, price: p });
-    if (error) { toast.error("Не удалось выставить"); return; }
-    act((s) => ({ state: { ...s, garage: s.garage.filter((c) => c.id !== car.id) }, message: "Выставлено на барахолку" }));
-    setSellCar(null);
-    setPrice("");
-    load();
-  };
-
-  const cancel = async (l: ListingRow) => {
-    if (state.garage.length >= garageCapacity(state)) { toast.error("Освободи место в гараже"); return; }
-    const { data, error } = await supabase.from("market_listings").update({ status: "cancelled" }).eq("id", l.id).eq("status", "active").select();
-    if (error || !data?.length) { toast.error("Не получилось снять — возможно, уже купили"); return; }
-    act((s) => ({ state: { ...s, garage: [...s.garage, l.car] }, message: "Снято с продажи" }));
-    load();
-  };
+  if (!social) return <Offline error={socialError} retry={() => void refreshSocial()} />;
 
   return (
-    <Tabs defaultValue="top">
+    <Tabs defaultValue="rating">
       <TabsList className="w-full">
-        <TabsTrigger value="top" className="flex-1">Рейтинг</TabsTrigger>
-        <TabsTrigger value="market" className="flex-1">Барахолка</TabsTrigger>
+        <TabsTrigger value="rating" className="flex-1">Рейтинг</TabsTrigger>
+        <TabsTrigger value="online" className="flex-1">Онлайн · {social.onlineCount}</TabsTrigger>
       </TabsList>
-      <TabsContent value="top" className="mt-3 space-y-2">
-        {!user && <SignInCta text="Войди, чтобы попасть в рейтинг игроков." />}
-        {top.length === 0 && <Empty>Пока никого нет</Empty>}
-        {top.map((p, i) => (
-          <Tile key={p.id} className={p.id === user?.id ? "flex items-center gap-3 border-primary" : "flex items-center gap-3"}>
-            <span className="w-6 text-center font-display text-sm text-muted-foreground">{i + 1}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{p.nickname}</p>
-              <p className="text-xs text-muted-foreground">Уровень {p.level}</p>
-            </div>
-            <span className="font-display text-sm text-success">{fmtShort(p.net_worth)}</span>
-          </Tile>
-        ))}
+      <TabsContent value="rating" className="mt-3 space-y-2">
+        <Section title="Рейтинг по сделкам" right={<Button size="sm" variant="ghost" onClick={() => void refreshSocial()}>Обновить</Button>}>
+          {rating.length === 0 && <Empty>Сделок пока нет — стань первым</Empty>}
+          {rating.map((p, i) => (
+            <Tile key={p.id} className={p.id === social.me.id ? "flex items-center gap-3 border-primary" : "flex items-center gap-3"}>
+              <span className="w-6 text-center font-display text-sm text-muted-foreground">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{p.nickname}</p>
+                <p className="text-xs text-muted-foreground">{p.deals} сделок · ур. {p.level}</p>
+              </div>
+              <span className="font-display text-sm text-success">{fmtShort(p.netWorth)}</span>
+            </Tile>
+          ))}
+        </Section>
+        <Section title="Последние сделки">
+          {deals.length === 0 && <Empty>Пока никто не закрыл сделку</Empty>}
+          {deals.slice(0, 10).map((d) => (
+            <Tile key={d.id} className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{d.title}</p>
+                <p className="text-xs text-muted-foreground">{d.nickname}</p>
+              </div>
+              <span className="font-display text-sm text-success">{fmt(d.price)}</span>
+            </Tile>
+          ))}
+        </Section>
       </TabsContent>
-      <TabsContent value="market" className="mt-3 space-y-3">
-        {!user ? (
-          <SignInCta text="Покупай и продавай машины другим игрокам после входа." />
-        ) : (
-          <>
-            <Section title="Продать свою машину">
-              {state.garage.length === 0 && <Empty>В гараже нет машин</Empty>}
-              {state.garage.map((c) => (
-                <Tile key={c.id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="font-semibold">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">Оценка {fmt(carValue(c))}</p>
-                    </div>
-                    <Button size="sm" variant="secondary" onClick={() => { setSellCar(sellCar === c.id ? null : c.id); setPrice(String(carValue(c))); }}>Выставить</Button>
-                  </div>
-                  {sellCar === c.id && (
-                    <div className="mt-2 flex gap-2">
-                      <Input inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" />
-                      <Button onClick={() => publish(c)}>ОК</Button>
-                    </div>
-                  )}
-                </Tile>
-              ))}
-            </Section>
-            <Section title="Объявления игроков" right={<Button size="sm" variant="ghost" onClick={load}>Обновить</Button>}>
-              {listings.length === 0 && <Empty>Пока пусто</Empty>}
-              {listings.map((l) => (
-                <Tile key={l.id}>
-                  <p className="font-semibold">{l.car.name} · {l.car.year}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Продавец {l.seller_nickname} · {l.car.condition}% · оценка {fmt(carValue(l.car))}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <p className="font-display font-semibold">{fmt(l.price)}</p>
-                    {l.seller_id === user.id ? (
-                      <Button size="sm" variant="secondary" onClick={() => cancel(l)}>Снять</Button>
-                    ) : (
-                      <Button size="sm" onClick={() => buy(l)}>Купить</Button>
-                    )}
-                  </div>
-                </Tile>
-              ))}
-            </Section>
-          </>
-        )}
+      <TabsContent value="online" className="mt-3 space-y-2">
+        <Section title={`Сейчас в игре · ${social.onlineCount}`} right={<Button size="sm" variant="ghost" onClick={() => void refreshSocial()}>Обновить</Button>}>
+          {online.length === 0 && <Empty>Никого нет в сети. Заходи с другого устройства — и вы увидите друг друга.</Empty>}
+          {online.map((p) => (
+            <Tile key={p.id} className="flex items-center gap-3">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-success" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{p.nickname}</p>
+                <p className="text-xs text-muted-foreground">{p.deals} сделок · ур. {p.level}</p>
+              </div>
+              <span className="font-display text-sm text-success">{fmtShort(p.netWorth)}</span>
+            </Tile>
+          ))}
+        </Section>
       </TabsContent>
     </Tabs>
   );
 }
 
+/** Магазин: заявка на оплату уходит администратору, товар выдаётся после проверки. */
 export function ShopApp() {
-  const { user, checkGrants } = useGame();
-  const [checking, setChecking] = useState(false);
+  const { social, refreshSocial, orderItem } = useGame();
   const [buying, setBuying] = useState<ShopItem | null>(null);
   const [note, setNote] = useState("");
-  if (buying && user)
+  const [qrOk, setQrOk] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const myOrders = (social?.orders ?? []).filter((o) => o.playerId === social?.me.id);
+
+  if (buying)
     return (
       <div className="space-y-3">
         <Tile className="border-destructive space-y-1">
           <p className="font-semibold">⚠️ Принимается только в сомах</p>
-          <p className="text-sm">Если другая валюта, то вы не сможете купить. Когда купите, ожидайте ответа администратора — он вам выдаст ваш товар.</p>
+          <p className="text-sm">
+            Если другая валюта, то вы не сможете купить. Когда купите, ожидайте ответа администратора — он вам выдаст ваш товар.
+          </p>
         </Tile>
         <Tile className="space-y-2 text-center">
           <p className="font-semibold">{buying.name} · {buying.priceRub} сом</p>
-          <img src={qrAsset.url} alt="QR для оплаты MBank" className="mx-auto w-56 rounded-lg" />
+          {qrOk ? (
+            <img
+              src={qrAsset.url}
+              alt="QR для оплаты MBank"
+              className="mx-auto w-56 rounded-lg"
+              onError={() => setQrOk(false)}
+            />
+          ) : (
+            <div className="mx-auto w-56 rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
+              QR-картинка не загрузилась. Напиши в мессенджер — администратор пришлёт реквизиты MBank, оплата всё равно засчитается по заявке.
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">Отсканируй QR в MBank и переведи ровно {buying.priceRub} сом</p>
         </Tile>
-        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Имя отправителя или последние цифры номера" />
-        <Button className="w-full" disabled={!note.trim()} onClick={async () => {
-          const { error } = await supabase.from("payment_requests").insert({ user_id: user.id, item_id: buying.id, price_som: buying.priceRub, payer_note: note.trim() });
-          if (error) { toast.error(error.message); return; }
-          toast.success("Заявка отправлена. Ожидайте ответа администратора");
-          setBuying(null); setNote("");
-        }}>Я оплатил</Button>
+        <div className="space-y-1">
+          <label htmlFor="order-note" className="wb-field-label block">Имя отправителя или последние цифры номера</label>
+          <Input id="order-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Например: Азамат, 4412" />
+        </div>
+        <Button
+          className="w-full"
+          disabled={!note.trim() || sending}
+          onClick={async () => {
+            setSending(true);
+            try {
+              await orderItem({ id: buying.id, name: buying.name, priceSom: buying.priceRub, note: note.trim() });
+              toast.success("Заявка отправлена. Ожидайте ответа администратора");
+              setBuying(null);
+              setNote("");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Заявка не отправилась");
+            } finally {
+              setSending(false);
+            }
+          }}
+        >
+          {sending ? "Отправляем…" : "Я оплатил"}
+        </Button>
         <Button variant="ghost" className="w-full" onClick={() => setBuying(null)}>Назад</Button>
       </div>
     );
+
   return (
     <div className="space-y-3">
       <Tile className="icon-purple border-0 p-4">
         <p className="font-display text-lg font-semibold">Магазин wertперекуп</p>
         <p className="mt-1 text-sm opacity-90">Оплата только в сомах по QR. Товар выдаёт администратор после проверки.</p>
       </Tile>
-      {!user && <SignInCta text="Войди, чтобы покупки привязались к твоему аккаунту." />}
       {SHOP_ITEMS.map((i) => (
         <Tile key={i.id} className="flex items-center justify-between gap-2">
           <div>
             <p className="font-semibold">
-              {i.name} {i.badge && <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[10px] text-primary-foreground">{i.badge}</span>}
+              {i.name}{" "}
+              {i.badge && <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[10px] text-primary-foreground">{i.badge}</span>}
             </p>
             <p className="text-xs text-muted-foreground">{i.desc}</p>
           </div>
-          <Button size="sm" disabled={!user} onClick={() => setBuying(i)}>
-            {i.priceRub} сом
-          </Button>
+          <Button size="sm" onClick={() => setBuying(i)}>{i.priceRub} сом</Button>
         </Tile>
       ))}
-      {user && (
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={checking}
-          onClick={async () => {
-            setChecking(true);
-            const n = await checkGrants();
-            setChecking(false);
-            if (n === 0) toast("Новых покупок нет");
-          }}
-        >
-          Проверить мои покупки
-        </Button>
-      )}
+
+      <Section title="Мои заявки" right={<Button size="sm" variant="ghost" onClick={() => void refreshSocial()}>Обновить</Button>}>
+        {myOrders.length === 0 && <Empty>Заявок нет</Empty>}
+        {myOrders.slice(0, 8).map((o) => (
+          <Tile key={o.id} className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{o.itemName}</p>
+              <p className="text-xs text-muted-foreground">{new Date(o.at).toLocaleString("ru-RU")}</p>
+            </div>
+            <span
+              className={
+                o.status === "approved"
+                  ? "text-xs font-semibold text-success"
+                  : o.status === "rejected"
+                    ? "text-xs font-semibold text-destructive"
+                    : "text-xs font-semibold text-warning"
+              }
+            >
+              {o.status === "approved" ? "выдано" : o.status === "rejected" ? "отклонено" : "на проверке"}
+            </span>
+          </Tile>
+        ))}
+      </Section>
     </div>
   );
 }
