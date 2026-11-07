@@ -31,7 +31,7 @@ const TABS: { id: Tab; label: string; icon: typeof ShoppingBag }[] = [
 const QUICK = ["Привет", "Какая цена?", "Скинь скидку", "Документы чистые?"];
 
 export function BlackShopApp() {
-  const { state, set, act, nickname } = useGame();
+  const { state, set, act, nickname, social } = useGame();
   const [tab, setTab] = useState<Tab>("shop");
   const [sellerId, setSellerId] = useState(BLACK_SELLERS[0]!.id);
   const [carId, setCarId] = useState(BLACK_SELLERS[0]!.cars[0]!);
