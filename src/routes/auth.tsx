@@ -1,11 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import "@lovable.dev/cloud-auth-js/styles.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { fetchGoogleStatus, signInWithGoogle } from "@/lib/google-auth";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -28,6 +27,38 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleHint, setGoogleHint] = useState<string | null>(null);
+
+  // Возврат с accounts.google.com: Supabase отдаёт сессию в hash — client сам её подхватит.
+  useEffect(() => {
+    let alive = true;
+    const goHome = () => {
+      if (alive) navigate({ to: "/" });
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) goHome();
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) goHome();
+    });
+
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const errorText = params.get("error_description") ?? new URLSearchParams(window.location.search).get("error_description");
+    if (errorText) toast.error(decodeURIComponent(errorText).replace(/\+/g, " "));
+
+    void fetchGoogleStatus().then((status) => {
+      if (!alive) return;
+      setGoogleHint(status.available ? null : "Google-вход пока недоступен — войди по почте.");
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,11 +80,16 @@ function AuthPage() {
     }
   };
 
-  const oauth = async (provider: "google" | "lovable") => {
-    const r = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
-    if (r.error) { toast.error("Не удалось войти"); return; }
-    if (r.redirected) return;
-    navigate({ to: "/" });
+  const google = async () => {
+    setGoogleBusy(true);
+    const result = await signInWithGoogle();
+    if (!result.started) {
+      setGoogleBusy(false);
+      toast.error(result.message ?? "Не удалось войти через Google");
+      return;
+    }
+    // Дальше браузер уходит на страницу выбора Google-аккаунта.
+    toast("Переходим в Google…");
   };
 
   return (
@@ -63,8 +99,25 @@ function AuthPage() {
           <h1 className="font-display text-2xl font-semibold">wertперекуп</h1>
           <p className="mt-1 text-sm text-muted-foreground">{mode === "in" ? "Вход в аккаунт" : "Новый аккаунт"}</p>
         </div>
-        <Button variant="secondary" className="w-full" onClick={() => oauth("google")}>Продолжить с Google</Button>
-        <button type="button" className="lovable-auth-button w-full" onClick={() => oauth("lovable")}>Continue with Lovable</button>
+
+        <Button
+          variant="secondary"
+          className="w-full"
+          data-testid="google-signin"
+          disabled={googleBusy}
+          onClick={google}
+        >
+          <span aria-hidden className="mr-2 font-display text-base font-bold">G</span>
+          {googleBusy ? "Открываем Google…" : "Продолжить с Google"}
+        </Button>
+        {googleHint && <p className="text-center text-xs text-muted-foreground">{googleHint}</p>}
+
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          или по почте
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
         <form onSubmit={submit} className="space-y-2">
           {mode === "up" && <Input placeholder="Ник в игре" maxLength={20} value={nickname} onChange={(e) => setNickname(e.target.value)} />}
           <Input type="email" required placeholder="Почта" value={email} onChange={(e) => setEmail(e.target.value)} />

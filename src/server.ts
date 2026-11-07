@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleSocialApi } from "./server/social-api";
+import { handleAuthProviderApi } from "./server/auth-provider-api";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -50,6 +51,8 @@ export default {
     try {
       const apiResponse = await handleSocialApi(request);
       if (apiResponse) return apiResponse;
+      const authResponse = await handleAuthProviderApi(request);
+      if (authResponse) return authResponse;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
