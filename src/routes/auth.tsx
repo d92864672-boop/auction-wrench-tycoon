@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,12 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  // Поля читаем из DOM при отправке: если человек начал печатать до загрузки
+  // скриптов (медленный мобильный интернет), введённое не пропадёт.
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const readEmail = () => (emailRef.current?.value ?? email).trim();
+  const readPassword = () => passwordRef.current?.value ?? password;
   const [busy, setBusy] = useState(false);
   // Пароль, который применим после подтверждения кодом (вход без кода потом).
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
