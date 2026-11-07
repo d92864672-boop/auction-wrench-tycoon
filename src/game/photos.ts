@@ -44,9 +44,21 @@ const EXTERIOR: Record<string, string> = {
   wert: wertImg,
 };
 
+/** WERTOOS BLACK cars reuse the closest matching photos. */
+const BLACK_PHOTO: Record<string, string> = {
+  "wb-urus": urusImg,
+  "wb-g63": g63Img,
+  "wb-rs6": rs6Img,
+  "wb-e63": e63Img,
+  "wb-tesla": teslaImg,
+  "wb-supra": supraImg,
+  "wb-lc200": lc200Img,
+  "wb-f40": f40Img,
+};
+
 /** 1–2 photos per car: exterior, plus an interior shot for most cars (stable per car id). */
 export function carPhotos(car: Pick<Car, "id" | "modelId">): string[] {
-  const ext = EXTERIOR[car.modelId] ?? EXTERIOR["vaz2107"]!;
+  const ext = EXTERIOR[car.modelId] ?? BLACK_PHOTO[car.modelId] ?? EXTERIOR["vaz2107"]!;
   const hash = [...car.id].reduce((a, ch) => a + ch.charCodeAt(0), 0);
   if (hash % 5 < 2) return [ext];
   const base = modelOf(car.modelId).base;

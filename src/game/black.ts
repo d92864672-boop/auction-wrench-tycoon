@@ -102,7 +102,7 @@ export type ChatOutcome = "deal" | "counter" | "angry" | "info" | "closed";
 export type ChatTurn = { state: GameState; reply: string; outcome: ChatOutcome };
 
 /** Talk to a dealer: small talk, questions about the car, or a price offer. */
-export function talkToSeller(
+function talkTurn(
   s: GameState,
   sellerId: string,
   carId: string,
@@ -213,6 +213,19 @@ export function talkToSeller(
       ? `Мало. Могу отдать за ${counter.toLocaleString("ru-RU")} ₽.`
       : `Последнее слово — ${counter.toLocaleString("ru-RU")} ₽.`;
   return { state: appendMsg(state, sellerId, "me", body, { tries, offer: counter }), reply, outcome: "counter" };
+}
+
+/** Public entry: sends the player's message and stores the dealer's answer in the log. */
+export function talkToSeller(
+  s: GameState,
+  sellerId: string,
+  carId: string,
+  text: string,
+  roll = Math.random,
+): ChatTurn {
+  const turn = talkTurn(s, sellerId, carId, text, roll);
+  if (!text.trim() || !sellerChat(turn.state, sellerId)) return turn;
+  return { ...turn, state: appendMsg(turn.state, sellerId, "seller", turn.reply) };
 }
 
 /** Hand the money over after the dealer agreed on a price. */

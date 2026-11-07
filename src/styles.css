@@ -298,3 +298,239 @@
 @media (prefers-reduced-motion: reduce) {
   .anim-app-in, .anim-fade-up, .anim-icon-pop, .anim-win, .anim-shake, .anim-land, .anim-msg { animation: none; }
 }
+
+/* ============= WERTOOS BLACK (чёрно-красная тема) ============= */
+.wb-shell {
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(220, 38, 38, 0.22), transparent 60%),
+    radial-gradient(90% 50% at 0% 100%, rgba(127, 29, 29, 0.28), transparent 65%),
+    linear-gradient(180deg, #0a0709, #0d0a0c 55%, #120a0c);
+  border-radius: 1.25rem;
+  padding: 0.75rem;
+  color: #f6eeee;
+}
+.wb-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  padding: 0.85rem;
+  background: linear-gradient(150deg, #1a0d11 0%, #0c0a0c 55%, #210a0c 100%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 40px -24px rgba(239, 68, 68, 0.8);
+}
+.wb-hero::after {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.55), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.wb-kicker {
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #ef8b8b;
+}
+.wb-logo {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 0 22px rgba(239, 68, 68, 0.45);
+}
+.wb-logo-red { color: #ff3b3b; }
+.wb-crest {
+  display: flex;
+  height: 38px;
+  width: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  color: #fff;
+  background: linear-gradient(160deg, #ef4444, #450a0a);
+  box-shadow: 0 8px 22px -8px rgba(239, 68, 68, 0.9);
+}
+.wb-stats {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.wb-stats > div {
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.35rem;
+  text-align: center;
+}
+.wb-stats span {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9a3a3;
+}
+.wb-stats b { font-size: 11px; color: #fff; }
+.wb-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem;
+}
+.wb-seg > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-radius: 0.65rem;
+  padding: 0.35rem 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: #b9a3a3;
+  transition: all 0.18s ease;
+}
+.wb-seg > button[data-active="true"] {
+  color: #fff;
+  background: linear-gradient(160deg, #ef4444, #7f1d1d);
+  box-shadow: 0 8px 18px -10px rgba(239, 68, 68, 1);
+}
+.wb-card {
+  border-radius: 1rem;
+  background: linear-gradient(160deg, rgba(28, 18, 20, 0.96), rgba(10, 9, 10, 0.98));
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: #f6eeee;
+}
+.wb-price { font-size: 12px; font-weight: 800; color: #ff5b5b; }
+.wb-btn {
+  background: linear-gradient(160deg, #ef4444, #991b1b) !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 700;
+}
+.wb-btn:disabled { opacity: 0.45; }
+.wb-btn-ghost {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #ff8a8a !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+.wb-car {
+  border-radius: 0.8rem;
+  padding: 0.4rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.wb-chip {
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 0.3rem 0.6rem;
+  font-size: 10px;
+  font-weight: 600;
+  color: #d8c4c4;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.wb-chip[data-active="true"] {
+  color: #fff;
+  background: linear-gradient(160deg, #ef4444, #7f1d1d);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+.wb-chat {
+  border-radius: 0.8rem;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.wb-bubble-me {
+  margin-left: auto;
+  max-width: 85%;
+  width: fit-content;
+  border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #fff;
+  background: linear-gradient(160deg, #ef4444, #991b1b);
+}
+.wb-bubble-seller {
+  margin-right: auto;
+  max-width: 85%;
+  width: fit-content;
+  border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #f1e6e6;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.wb-quick {
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 10px;
+  color: #ffb4b4;
+  border: 1px dashed rgba(239, 68, 68, 0.45);
+}
+.wb-input {
+  background: rgba(0, 0, 0, 0.5) !important;
+  border-color: rgba(239, 68, 68, 0.28) !important;
+  color: #fff !important;
+  font-size: 12px;
+}
+.wb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.7rem;
+  padding: 0.4rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.wb-row-me {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.wb-rank {
+  display: flex;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(160deg, #3f3f46, #18181b);
+}
+.wb-row:nth-child(2) .wb-rank { background: linear-gradient(160deg, #fbbf24, #b45309); }
+.wb-row:nth-child(3) .wb-rank { background: linear-gradient(160deg, #e5e7eb, #6b7280); }
+.wb-row:nth-child(4) .wb-rank { background: linear-gradient(160deg, #d97706, #78350f); }
+.wb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffb4b4;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.wb-dot-on {
+  height: 7px;
+  width: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+.wb-dot-off { height: 7px; width: 7px; flex-shrink: 0; border-radius: 999px; background: #52525b; }
+.icon-black { background: linear-gradient(160deg, oklch(0.42 0.18 22), oklch(0.12 0.01 260)); }
