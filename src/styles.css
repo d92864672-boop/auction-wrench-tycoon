@@ -329,9 +329,14 @@
   pointer-events: none;
 }
 .wb-kicker {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.32em;
-  text-transform: uppercase;
+  font-variant-caps: all-small-caps;
+  color: #ef8b8b;
+}
+.wb-field-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
   color: #ef8b8b;
 }
 .wb-logo {
