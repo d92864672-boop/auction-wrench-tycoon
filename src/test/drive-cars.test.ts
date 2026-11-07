@@ -6,9 +6,15 @@ import { clearControls, frontWheelSteer, newDrive, stepDrive, wheelSpinDelta } f
 const cruise = (modelId: string) => {
   const spec = driveSpec(modelId);
   let s = newDrive();
+  let peak = 0;
   const limits = { max: topSpeedMs(spec), accel: spec.accel };
-  for (let i = 0; i < 60 * 90; i++) s = stepDrive(s, { ...clearControls(), up: true }, "awd", 1 / 60, limits);
-  return { spec, state: s, kmh: s.speed * 3.6 };
+  for (let i = 0; i < 60 * 90; i++) {
+    s = stepDrive(s, { ...clearControls(), up: true }, "awd", 1 / 60, limits);
+    peak = Math.max(peak, s.speed);
+    // Дальше начинается стена карты: она гасит скорость, это не лимит машины.
+    if (Math.abs(s.z) > 150 || Math.abs(s.x) > 150) break;
+  }
+  return { spec, state: s, kmh: peak * 3.6 };
 };
 
 describe("машины в Покатушках", () => {

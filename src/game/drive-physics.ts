@@ -44,7 +44,9 @@ export function stepDrive(s: DriveState, c: Controls, mode: DriveMode, delta: nu
   let forward = s.vx * Math.sin(s.yaw) + s.vz * Math.cos(s.yaw);
   if (c.up) forward += accel * dt;
   if (c.down) forward -= (forward > 0.3 ? 25 : accel * 0.65) * dt;
-  forward *= Math.exp(-(c.drift ? 0.5 : 0.16) * dt);
+  // Сопротивление действует только на выбеге, иначе машина никогда не достаёт
+  // свой заявленный максимум: на газу разгон линейный до topSpeed.
+  if (!c.up) forward *= Math.exp(-(c.drift ? 0.5 : 0.16) * dt);
   forward = Math.max(-9, Math.min(topSpeed, forward));
   const steer = Number(c.left) - Number(c.right);
   const yaw = s.yaw + steer * p.turn * (c.drift ? 1.45 : 1) * Math.min(1, Math.abs(forward) / 6) * Math.sign(forward || 1) * dt;
