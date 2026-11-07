@@ -14,13 +14,17 @@ ENV NITRO_PRESET=node-server
 RUN bun run build
 
 # ---------- runtime ----------
-# Debian-based image: the Alpine v3.24 node base still ships a blocking zlib CVE
-# (ALPINE-CVE-2026-4738) whose fix is not in the v3.24 repository yet.
-FROM node:26-trixie-slim
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:26-alpine
+# The base image still ships zlib 1.3.2-r1, which is blocked by
+# ALPINE-CVE-2026-4738. The fixed package (zlib 1.4-r0) is published in the
+# Alpine v3.24 main repository, so pull it explicitly if the base branch lacks it.
+RUN apk upgrade --no-cache \
+    && (apk add --no-cache --upgrade 'zlib>=1.4' \
+        || (echo "https://dl-cdn.alpinelinux.org/alpine/v3.24/main" >> /etc/apk/repositories \
+            && apk update --no-cache \
+            && apk add --no-cache --upgrade 'zlib>=1.4')) \
+    && apk info -v zlib
+
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
