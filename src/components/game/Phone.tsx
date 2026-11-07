@@ -53,7 +53,9 @@ function clock(min: number) {
 
 export function Phone() {
   const { state, isAdmin, ban } = useGame();
-  const apps = isAdmin ? [...APPS, ADMIN_APP] : APPS;
+  // Пункт «Админка» виден всем, чтобы владелец сразу её нашёл.
+  // Данные панели всё равно отдаёт сервер только владельцу (d92864672@gmail.com).
+  const apps = [...APPS, ADMIN_APP];
   const [open, setOpen] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
