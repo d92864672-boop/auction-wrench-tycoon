@@ -1,8 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, Lightformer, useGLTF } from "@react-three/drei";
+import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
-import carAsset from "@/assets/models/drive-car.glb.asset.json";
 import { newDrive, stepDrive, type Controls, type DriveMode } from "@/game/drive-physics";
 
 function palette() {
@@ -11,22 +10,52 @@ function palette() {
   return { sky: read("sky"), asphalt: read("asphalt"), line: read("line"), grass: read("grass"), building: read("building"), window: read("window"), sun: read("sun") };
 }
 type SceneProps = { ctl: RefObject<Controls>; modeRef: RefObject<DriveMode>; speedRef: RefObject<HTMLSpanElement | null>; slipRef: RefObject<HTMLSpanElement | null>; resetRef: RefObject<boolean> };
+
+const WHEEL_NAMES = ["wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right"] as const;
+const WHEELS: { name: (typeof WHEEL_NAMES)[number]; position: [number, number, number] }[] = [
+  { name: "wheel-front-left", position: [-0.92, 0.5, -1.35] },
+  { name: "wheel-front-right", position: [0.92, 0.5, -1.35] },
+  { name: "wheel-back-left", position: [-0.92, 0.5, 1.4] },
+  { name: "wheel-back-right", position: [0.92, 0.5, 1.4] },
+];
+
+/** Колесо: покрышка + диск + спица, чтобы вращение было видно. */
+function Wheel({ name, position }: { name: string; position: [number, number, number] }) {
+  return (
+    <group name={name} position={position}>
+      <mesh castShadow rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.34, 24]} />
+        <meshStandardMaterial color="#0d0d10" roughness={0.9} />
+      </mesh>
+      <mesh rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.29, 0.29, 0.36, 20]} />
+        <meshStandardMaterial color="#c7ccd6" metalness={0.95} roughness={0.22} />
+      </mesh>
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} rotation={[(i * Math.PI) / 3, 0, Math.PI / 2]} position={[0, 0, 0]}>
+          <boxGeometry args={[0.06, 0.52, 0.36]} />
+          <meshStandardMaterial color="#8b929f" metalness={0.85} roughness={0.3} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * Машина собрана из примитивов прямо в сцене: никаких внешних .glb,
+ * поэтому «Покатушки» запускаются сразу и не зависят от загрузки ассетов.
+ */
 function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
-  const { scene } = useGLTF(carAsset.url);
   const g = useRef<THREE.Group>(null);
   const s = useRef(newDrive());
   const ready = useRef(false);
+  const wheels = useRef<THREE.Object3D[]>([]);
   const behind = useMemo(() => new THREE.Vector3(), []);
-  const model = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse(o => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.receiveShadow = true; } });
-    const box = new THREE.Box3().setFromObject(clone), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
-    const scale = 4.2 / size.z;
-    clone.scale.setScalar(scale);
-    clone.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    return clone;
-  }, [scene]);
-  const wheels = useMemo(() => ["wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right"].map(n => model.getObjectByName(n)).filter((n): n is THREE.Object3D => !!n), [model]);
+
+  useEffect(() => {
+    wheels.current = WHEEL_NAMES.map((n) => g.current?.getObjectByName(n)).filter((o): o is THREE.Object3D => Boolean(o));
+  }, []);
+
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const debug = { get state() { return { ...s.current, mode: modeRef.current }; }, sim(seconds: number) {
@@ -36,6 +65,7 @@ function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
     Object.assign(window, { __drive: debug });
     return () => { Reflect.deleteProperty(window, "__drive"); };
   }, [ctl, modeRef]);
+
   useFrame(({ camera, gl }, delta) => {
     const car = g.current;
     if (!car) return;
@@ -44,8 +74,8 @@ function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
     s.current = stepDrive(s.current, ctl.current, modeRef.current, dt);
     const v = s.current;
     car.position.set(v.x, 0, v.z); car.rotation.y = v.yaw;
-    for (const wheel of wheels) {
-      wheel.rotation.x += v.speed * dt / 0.5;
+    for (const wheel of wheels.current) {
+      wheel.rotation.x += (v.speed * dt) / 0.5;
       if (wheel.name.includes("front")) wheel.rotation.y = (Number(ctl.current.right) - Number(ctl.current.left)) * 0.35;
     }
     behind.set(v.x - Math.sin(v.yaw) * 9, 4.6, v.z - Math.cos(v.yaw) * 9);
@@ -53,12 +83,71 @@ function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
     camera.lookAt(v.x + Math.sin(v.yaw) * 3, 1.1, v.z + Math.cos(v.yaw) * 3);
     if (speedRef.current) speedRef.current.textContent = String(Math.round(v.speed * 3.6));
     if (slipRef.current) slipRef.current.textContent = v.slip > 0.12 ? `ДРИФТ · ${Math.round(v.slip * 180 / Math.PI)}°` : "Сцепление";
-    // This callback runs before rendering: mark ready on the following loaded-model frame.
+    // This callback runs before rendering: mark ready on the following frame.
     if (ready.current) gl.domElement.dataset['sceneReady'] = "1";
     ready.current = true;
   });
-  return <group ref={g}><primitive object={model} /></group>;
+
+  return (
+    <group ref={g}>
+      {/* кузов */}
+      <mesh position={[0, 0.62, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.86, 0.56, 4.2]} />
+        <meshStandardMaterial color="#17171b" metalness={0.72} roughness={0.3} />
+      </mesh>
+      {/* капот и корма чуть ниже — силуэт купе */}
+      <mesh position={[0, 0.92, -1.05]} castShadow>
+        <boxGeometry args={[1.7, 0.24, 1.7]} />
+        <meshStandardMaterial color="#1d1d22" metalness={0.7} roughness={0.34} />
+      </mesh>
+      {/* кабина */}
+      <mesh position={[0, 1.12, 0.25]} castShadow>
+        <boxGeometry args={[1.56, 0.44, 1.9]} />
+        <meshStandardMaterial color="#202026" metalness={0.6} roughness={0.38} />
+      </mesh>
+      {/* стёкла */}
+      <mesh position={[0, 1.16, 0.25]}>
+        <boxGeometry args={[1.6, 0.3, 1.7]} />
+        <meshStandardMaterial color="#0b1a24" metalness={0.9} roughness={0.08} />
+      </mesh>
+      {/* красная полоса по борту */}
+      <mesh position={[0, 0.6, 0]}>
+        <boxGeometry args={[1.9, 0.1, 3.4]} />
+        <meshStandardMaterial color="#d81f2a" emissive="#5c0006" emissiveIntensity={0.4} roughness={0.4} />
+      </mesh>
+      {/* фары */}
+      {[-0.6, 0.6].map((x) => (
+        <mesh key={`hl${x}`} position={[x, 0.72, -2.08]}>
+          <boxGeometry args={[0.44, 0.16, 0.08]} />
+          <meshStandardMaterial color="#fff6d5" emissive="#ffe9a8" emissiveIntensity={1.6} />
+        </mesh>
+      ))}
+      {/* стопы */}
+      {[-0.62, 0.62].map((x) => (
+        <mesh key={`tl${x}`} position={[x, 0.76, 2.08]}>
+          <boxGeometry args={[0.42, 0.14, 0.08]} />
+          <meshStandardMaterial color="#ff3b30" emissive="#ff1a10" emissiveIntensity={1.4} />
+        </mesh>
+      ))}
+      {/* антикрыло */}
+      <mesh position={[0, 1.06, 1.92]} castShadow>
+        <boxGeometry args={[1.5, 0.07, 0.42]} />
+        <meshStandardMaterial color="#101014" metalness={0.6} roughness={0.4} />
+      </mesh>
+      {/* выхлоп */}
+      {[-0.35, 0.35].map((x) => (
+        <mesh key={`ex${x}`} position={[x, 0.36, 2.1]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.09, 0.09, 0.2, 12]} />
+          <meshStandardMaterial color="#4a4f57" metalness={0.95} roughness={0.25} />
+        </mesh>
+      ))}
+      {WHEELS.map((w) => (
+        <Wheel key={w.name} name={w.name} position={w.position} />
+      ))}
+    </group>
+  );
 }
+
 function City({ p }: { p: ReturnType<typeof palette> }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas"); canvas.width = canvas.height = 256;
@@ -90,6 +179,7 @@ function City({ p }: { p: ReturnType<typeof palette> }) {
     </group>)}
   </>;
 }
+
 export default function DriveScene(props: SceneProps) {
   const p = useMemo(palette, []);
   return <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 4.6, -9], fov: 60 }}>
