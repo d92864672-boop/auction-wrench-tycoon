@@ -314,7 +314,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <GameCtx.Provider value={{ state, set, act, user, nickname, setNickname, cloudReady, checkGrants, reset, isAdmin, ban }}>
+    <GameCtx.Provider
+      value={{
+        state, set, act, user, nickname, setNickname, cloudReady, checkGrants, reset, isAdmin, ban,
+        social: socialSnap,
+        socialError,
+        refreshSocial,
+        reportDeal,
+        sendChat,
+        orderItem,
+        adminOverview,
+        adminAction,
+      }}
+    >
       {children}
     </GameCtx.Provider>
   );
