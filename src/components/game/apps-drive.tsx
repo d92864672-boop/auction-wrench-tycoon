@@ -104,8 +104,8 @@ function Drive({ car, mode, setMode, exit }: { car: Car; mode: DriveMode; setMod
         </div>
         <DriveSelector mode={mode} setMode={setMode} />
       </div>
-      <div className="absolute bottom-6 left-3 flex gap-2">{pad("left", "Влево", <ArrowLeft />)}{pad("right", "Вправо", <ArrowRight />)}</div>
-      <div className="absolute bottom-6 right-3 flex items-end gap-2">
+      <div className="absolute bottom-6 left-3 z-20 flex gap-2">{pad("left", "Влево", <ArrowLeft />)}{pad("right", "Вправо", <ArrowRight />)}</div>
+      <div className="absolute bottom-6 right-3 z-20 flex items-end gap-2">
         {pad("drift", "Дрифт", "ДРИФТ")}
         <div className="flex flex-col gap-2">{pad("up", "Газ", <ArrowUp />)}{pad("down", "Тормоз / задний ход", <ArrowDown />)}</div>
       </div>
