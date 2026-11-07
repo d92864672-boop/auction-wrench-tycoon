@@ -131,6 +131,81 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return count;
   }, [user]);
 
+  /** Выдачи администратора: деньги, предметы, сброс прогресса. */
+  const applySocialGrants = useCallback(async (snap: Snapshot) => {
+    const pending = snap.grants ?? [];
+    if (pending.length === 0) return;
+    for (const gr of pending) {
+      const itemId = gr.kind === "money" ? "admin-money" : gr.kind === "reset" ? "admin-reset" : (gr.itemId ?? "");
+      const r = applyGrant(stateRef.current, gr.id, itemId, gr.kind === "money" ? (gr.amount ?? 0) : undefined);
+      if (r.state !== stateRef.current) {
+        stateRef.current = r.state;
+        setState(r.state);
+      }
+      if (r.message) toast.success(r.message);
+    }
+    try {
+      setSocialSnap(await social.ackGrants(pending.map((g) => g.id)));
+    } catch {
+      /* подтвердим при следующем опросе */
+    }
+  }, []);
+
+  const refreshSocial = useCallback(async () => {
+    try {
+      const snap = await social.heartbeat({
+        nickname,
+        level: level(stateRef.current),
+        netWorth: netWorth(stateRef.current),
+      });
+      setSocialSnap(snap);
+      setSocialError(null);
+      setBan(snap.ban ? { reason: snap.ban.reason } : null);
+      await applySocialGrants(snap);
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Сервер недоступен");
+    }
+  }, [nickname, applySocialGrants]);
+
+  const reportDeal = useCallback(async (title: string, price: number) => {
+    try {
+      setSocialSnap(await social.deal(title, price));
+      setSocialError(null);
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Сделка не учтена");
+    }
+  }, []);
+
+  const sendChat = useCallback(
+    async (body: string) => {
+      const text = body.trim().slice(0, 300);
+      if (!text) return;
+      setSocialSnap(await social.chat(nickname, text));
+    },
+    [nickname],
+  );
+
+  const orderItem = useCallback(
+    async (item: { id: string; name: string; priceSom: number; note: string }) => {
+      setSocialSnap(await social.order({ itemId: item.id, itemName: item.name, priceSom: item.priceSom, note: item.note, nickname }));
+    },
+    [nickname],
+  );
+
+  const adminOverview = useCallback(async () => social.adminOverview(), []);
+  const adminAction = useCallback(
+    async (action: Record<string, unknown>) => (await social.adminAction(action)).message,
+    [],
+  );
+
+  // Онлайн: heartbeat раз в 10 секунд; ответ сразу обновляет игроков, рейтинг и чат.
+  useEffect(() => {
+    if (!loaded) return;
+    void refreshSocial();
+    const id = setInterval(() => void refreshSocial(), 10_000);
+    return () => clearInterval(id);
+  }, [loaded, refreshSocial]);
+
   // Доступ владельца: d92864672@gmail.com. Клиент показывает админку,
   // сервер (/api/social/admin) всё равно проверяет токен и email сам.
   useEffect(() => {
