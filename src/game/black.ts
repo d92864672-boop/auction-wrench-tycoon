@@ -49,7 +49,8 @@ export function makeBlackCar(carId: string, rand: () => number = Math.random): C
 
 /** Numbers from a free-form message: «5 000 000», «5млн», «900 тыс». */
 export function parseOffer(text: string): number | null {
-  const t = text.toLowerCase().replace(/\u00a0/g, " ");
+  // «5 000 000» and «18 млн» both collapse to a single number.
+  const t = text.toLowerCase().replace(/\u00a0/g, " ").replace(/\s+/g, "");
   const m = t.match(/(\d+(?:[.,]\d+)?)/);
   if (!m) return null;
   let n = Number.parseFloat(m[1]!.replace(",", "."));
