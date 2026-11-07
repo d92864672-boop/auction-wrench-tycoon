@@ -40,7 +40,24 @@ export function BlackShopApp() {
 
   const seller = BLACK_SELLERS.find((s) => s.id === sellerId) ?? BLACK_SELLERS[0]!;
   const chat = sellerChat(state, sellerId);
-  const board = useMemo(() => dealsLeaderboard(state, nickname), [state, nickname]);
+  // Рейтинг строится по реальным игрокам с сервера. Ботов в списке нет:
+  // если сервер ещё не ответил, показываем только себя.
+  const liveRating = social?.rating;
+  const board = useMemo(() => {
+    const meId = social?.me.id;
+    if (liveRating && liveRating.length > 0) {
+      return liveRating.map((p) => ({
+        id: p.id,
+        name: p.nickname,
+        tag: p.deals > 0 ? "сделки" : "новичок",
+        rating: playerRating(p.deals),
+        deals: p.deals,
+        online: p.id === meId || Boolean(social?.online.some((o) => o.id === p.id)),
+        me: p.id === meId,
+      }));
+    }
+    return dealsLeaderboard(state, nickname).filter((p) => p.me);
+  }, [liveRating, social, state, nickname]);
   const myRank = board.findIndex((p) => p.me) + 1;
   const deals = blackOf(state).deals;
   const boost = blackBoostBonus(state);
