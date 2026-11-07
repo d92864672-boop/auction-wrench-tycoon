@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { DRIVE_SPECS, MAX_TOP_SPEED_KMH, MIN_TOP_SPEED_KMH, driveSpec, topSpeedMs, wheelCircumference } from "@/game/drive-cars";
-import { CAR_MODELS } from "@/game/data";
+import {
+  DRIVE_SPECS,
+  MAX_TOP_SPEED_KMH,
+  MIN_TOP_SPEED_KMH,
+  driveSpec,
+  lookFingerprint,
+  topSpeedMs,
+  wheelCircumference,
+} from "@/game/drive-cars";
+import { BLACK_SELLERS, CAR_MODELS } from "@/game/data";
 import { clearControls, frontWheelSteer, newDrive, stepDrive, wheelSpinDelta } from "@/game/drive-physics";
 
 const cruise = (modelId: string) => {
@@ -17,13 +25,30 @@ const cruise = (modelId: string) => {
   return { spec, state: s, kmh: peak * 3.6 };
 };
 
+const BLACK_CAR_IDS = BLACK_SELLERS.flatMap((seller) => seller.cars);
+
 describe("машины в Покатушках", () => {
-  it("у каждой модели есть свой профиль скорости в диапазоне 148–326 км/ч", () => {
+  it("у каждой модели из каталога есть свой профиль скорости в диапазоне 148–326 км/ч", () => {
     for (const model of CAR_MODELS) {
       const spec = driveSpec(model.id);
       expect(spec.modelId, model.id).toBe(model.id);
       expect(spec.topSpeedKmh, model.id).toBeGreaterThanOrEqual(MIN_TOP_SPEED_KMH);
       expect(spec.topSpeedKmh, model.id).toBeLessThanOrEqual(MAX_TOP_SPEED_KMH);
+    }
+  });
+
+  it("каждая машина WERTOOS BLACK тоже имеет свой профиль, а не общий запасной", () => {
+    expect(BLACK_CAR_IDS.length).toBeGreaterThan(0);
+    for (const id of BLACK_CAR_IDS) {
+      const own = DRIVE_SPECS[id];
+      expect(own, id).toBeDefined();
+      expect(own!.modelId, id).toBe(id);
+      const spec = driveSpec(id);
+      expect(spec.topSpeedKmh).toBeGreaterThanOrEqual(MIN_TOP_SPEED_KMH);
+      expect(spec.topSpeedKmh).toBeLessThanOrEqual(MAX_TOP_SPEED_KMH);
+      // Свой профиль, а не DEFAULT_DRIVE_SPEC с подставленным id.
+      expect(spec.body, id).toBe(own!.body);
+      expect(spec.look.parts, id).toEqual(own!.look.parts);
     }
   });
 
@@ -46,13 +71,31 @@ describe("машины в Покатушках", () => {
     expect(fast.kmh).toBeGreaterThan(slow.kmh + 100);
   });
 
-  it("у каждой модели свой силуэт или цвет — модельки не повторяются один в один", () => {
+  it("у каждой машины своя модель: силуэт, нос, крыша, фары, решётка и детали не повторяются", () => {
     const ids = Object.keys(DRIVE_SPECS);
+    const prints = ids.map((id) => lookFingerprint(DRIVE_SPECS[id]!));
+    expect(new Set(prints).size).toBe(ids.length);
+    // Внешность действительно разная, а не только цвет: проверяем форму без краски.
     const shapes = new Set(ids.map((id) => {
       const s = DRIVE_SPECS[id]!;
-      return `${s.body}|${s.color}|${s.size.length}x${s.size.width}`;
+      return [s.body, s.look.nose, s.look.roof, s.look.lights, s.look.grille, ...s.look.parts].sort().join("|");
     }));
     expect(shapes.size).toBe(ids.length);
+  });
+
+  it("незнакомая модель получает собственную машину, а не общий серый кузов", () => {
+    const ids = ["legacy-1", "legacy-2", "future-suv", "gt-900", "old-coupe", "van-x"];
+    const specs = ids.map((id) => driveSpec(id));
+    // Стабильно между запусками: один id — одна и та же машина.
+    for (const [i, id] of ids.entries()) {
+      expect(lookFingerprint(driveSpec(id))).toBe(lookFingerprint(specs[i]!));
+      expect(specs[i]!.modelId).toBe(id);
+      expect(specs[i]!.topSpeedKmh).toBeGreaterThanOrEqual(MIN_TOP_SPEED_KMH);
+      expect(specs[i]!.topSpeedKmh).toBeLessThanOrEqual(MAX_TOP_SPEED_KMH);
+    }
+    // И заметно разная: хотя бы четыре разных силуэта на шесть незнакомых id.
+    const shapes = new Set(specs.map((s) => lookFingerprint(s)));
+    expect(shapes.size).toBeGreaterThanOrEqual(4);
   });
 
   it("колесо катится по скорости и радиусу, без пробуксовки в расчётах", () => {
