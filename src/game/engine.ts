@@ -42,6 +42,36 @@ export type Stats = {
   repairs: number;
 };
 
+/** One message in a chat with a WERTOOS BLACK dealer. */
+export type BlackChatMsg = { from: "me" | "seller"; text: string; at: number };
+
+/** A successfully closed deal — drives the deals leaderboard. */
+export type BlackDeal = {
+  id: string;
+  car: string;
+  price: number;
+  seller: string;
+  at: number;
+  via: "black" | "market";
+};
+
+export type BlackSellerState = {
+  sellerId: string;
+  carId: string | null;
+  messages: BlackChatMsg[];
+  /** Price the dealer agreed to, if any. */
+  offer: number | null;
+  tries: number;
+  agreed: boolean;
+};
+
+export type BlackState = {
+  sellers: Record<string, BlackSellerState>;
+  /** Stacks bought in the black shop: +2% to every sale price each. */
+  boost: number;
+  deals: BlackDeal[];
+};
+
 export type GameState = {
   version: 1;
   money: number;
@@ -77,6 +107,8 @@ export type GameState = {
   fx?: Record<Currency, number> | undefined;
   /** Whole currency units held. */
   wallet?: Record<Currency, number> | undefined;
+  /** WERTOOS BLACK progress: dealer chats, shop boosts and closed deals. */
+  black?: BlackState | undefined;
 };
 
 export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt: number; pay: number };
@@ -84,6 +116,23 @@ export type Job = { kind: "delivery" | "shift"; id: string; name: string; endAt:
 export type Result = { state: GameState; error?: string; message?: string };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+export const EMPTY_BLACK: BlackState = { sellers: {}, boost: 0, deals: [] };
+
+/** WERTOOS BLACK state with defaults filled in for older saves. */
+export const blackOf = (s: GameState): BlackState => {
+  const b = s.black ?? EMPTY_BLACK;
+  return { sellers: b.sellers ?? {}, boost: b.boost ?? 0, deals: b.deals ?? [] };
+};
+
+/** Remember a successfully closed deal. */
+export const pushDeal = (s: GameState, deal: Omit<BlackDeal, "id" | "at">): GameState => {
+  const b = blackOf(s);
+  return { ...s, black: { ...b, deals: [...b.deals, { ...deal, id: uid(), at: s.minutes }] } };
+};
+
+/** Number of successful deals — the black-market reputation score. */
+export const dealsCount = (s: GameState): number => blackOf(s).deals.length;
 
 export function newGame(): GameState {
   const s: GameState = {
@@ -115,6 +164,7 @@ export function newGame(): GameState {
     adUntilDay: 0,
     renovated: [],
     stockHistory: {},
+    black: { sellers: {}, boost: 0, deals: [] },
   };
   s.listings = generateListings(s);
   return s;
@@ -127,6 +177,7 @@ export function migrate(raw: unknown): GameState {
   const s = { ...base, ...(raw as Partial<GameState>) };
   s.stats = { ...base.stats, ...(s.stats ?? {}) };
   s.stockPrices = { ...base.stockPrices, ...(s.stockPrices ?? {}) };
+  s.black = { ...blackOf(s), ...(s.black ?? {}) };
   return s;
 }
 
@@ -153,7 +204,7 @@ export function garageCapacity(s: GameState): number {
 }
 
 function randomCar(rand: () => number, allowRare: boolean): Car {
-  const pool = CAR_MODELS.filter((m) => (allowRare ? m.rare : !m.rare) && m.id !== "wert");
+  const pool = CAR_MODELS.filter((m) => (allowRare ? m.rare : !m.rare) && m.id !== "wert" && !m.black);
   const m = pool[Math.floor(rand() * pool.length)]!;
   const minYear = m.id === "vaz2107" ? 1985 : m.rare ? 1987 : 1998;
   const year = Math.min(CURRENT_YEAR, minYear + Math.floor(rand() * (CURRENT_YEAR - minYear + 1)));
@@ -218,20 +269,23 @@ export function buyListing(s: GameState, id: string): Result {
 export function sellCar(s: GameState, carId: string, price?: number): Result {
   const car = s.garage.find((c) => c.id === carId);
   if (!car) return { state: s, error: "Машина не найдена" };
-  const offer = price ?? saleOffer(s, car);
+  const offer = price ?? Math.round(saleOffer(s, car) * (1 + 0.02 * blackOf(s).boost));
   const profit = offer - (car.boughtFor ?? 0);
   return {
     state: addXp(
-      {
-        ...s,
-        money: s.money + offer,
-        garage: s.garage.filter((c) => c.id !== carId),
-        stats: {
-          ...s.stats,
-          carsSold: s.stats.carsSold + 1,
-          profit: s.stats.profit + Math.max(0, profit),
+      pushDeal(
+        {
+          ...s,
+          money: s.money + offer,
+          garage: s.garage.filter((c) => c.id !== carId),
+          stats: {
+            ...s.stats,
+            carsSold: s.stats.carsSold + 1,
+            profit: s.stats.profit + Math.max(0, profit),
+          },
         },
-      },
+        { car: car.name, price: offer, seller: "Рынок", via: "market" },
+      ),
       300 + Math.max(0, Math.round(profit / 1000)),
     ),
     message: `Продано за ${fmt(offer)} (${profit >= 0 ? "+" : ""}${fmt(profit)})`,
