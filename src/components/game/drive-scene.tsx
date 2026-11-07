@@ -10,7 +10,7 @@ import {
   type Controls,
   type DriveMode,
 } from "@/game/drive-physics";
-import { driveSpec, topSpeedMs, type DriveSpec } from "@/game/drive-cars";
+import { driveSpec, topSpeedMs, type DrivePart, type DriveSpec, type RoofKind } from "@/game/drive-cars";
 import type { Car } from "@/game/engine";
 
 function palette() {
@@ -36,15 +36,14 @@ const WHEELS = [
 ] as const;
 const WHEEL_KEYS = WHEELS.map((w) => w.key);
 
-/** Пропорции кабины по типу кузова: длина/высота как доля габаритов, сдвиг по Z. */
-const CABIN: Record<DriveSpec["body"], { h: number; len: number; offset: number }> = {
-  classic: { h: 0.36, len: 0.44, offset: 0.02 },
-  sedan: { h: 0.32, len: 0.46, offset: 0.04 },
-  hatch: { h: 0.36, len: 0.5, offset: 0.16 },
-  coupe: { h: 0.27, len: 0.42, offset: 0.08 },
-  muscle: { h: 0.26, len: 0.4, offset: 0.1 },
-  suv: { h: 0.4, len: 0.56, offset: 0.06 },
-  super: { h: 0.24, len: 0.36, offset: 0.08 },
+/** Пропорции кабины по типу крыши: длина как доля габаритов и сдвиг по Z. */
+const CABIN: Record<RoofKind, { len: number; offset: number }> = {
+  notch: { len: 0.46, offset: 0.02 },
+  hatch: { len: 0.54, offset: 0.1 },
+  fastback: { len: 0.5, offset: 0 },
+  wagon: { len: 0.62, offset: -0.02 },
+  box: { len: 0.66, offset: -0.03 },
+  coupe: { len: 0.42, offset: 0.06 },
 };
 
 /** Колесо: покрышка, диск и спицы, чтобы вращение было видно. */
@@ -84,141 +83,397 @@ function Wheel({
   );
 }
 
+type BoxProps = {
+  size: [number, number, number];
+  pos: [number, number, number];
+  color: string;
+  metalness?: number;
+  roughness?: number;
+  emissive?: string;
+  emissiveIntensity?: number;
+  rot?: [number, number, number];
+};
+
+/** Короткая обёртка над коробкой: кузов собирается из десятков деталей. */
+function Box({ size, pos, color, metalness = 0.6, roughness = 0.35, emissive, emissiveIntensity, rot }: BoxProps) {
+  return (
+    <mesh position={pos} rotation={rot} castShadow>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        color={color}
+        metalness={metalness}
+        roughness={roughness}
+        emissive={emissive}
+        emissiveIntensity={emissiveIntensity}
+      />
+    </mesh>
+  );
+}
+
 /**
- * Кузов собирается из примитивов по профилю машины: у каждой модели свой
- * силуэт (классика, седан, хэтч, купе, маслкар, внедорожник, суперкар),
- * цвет, габариты, колёса и детали вроде антикрыла или кенгурятника.
+ * Кузов собирается из примитивов по профилю конкретной машины: форма носа,
+ * тип крыши, фары, решётка, расширение арок, клиренс и набор фирменных
+ * деталей. Поэтому каждая модель выглядит по-своему, а не «как все».
  * Нос машины смотрит в +Z — туда же, куда едет физика.
  */
 function CarBody({ spec }: { spec: DriveSpec }) {
   const { length: L, width: W, height: H } = spec.size;
-  const cabin = CABIN[spec.body];
-  const ride = spec.wheel.radius * (spec.body === "suv" ? 0.72 : 0.5);
-  const bodyH = H * 0.42;
+  const { look } = spec;
+  const R = spec.wheel.radius;
+  const ride = R * look.ride;
+  const bodyH = H * 0.4;
   const bodyY = ride + bodyH / 2;
-  const cabinH = H * cabin.h;
-  const cabinLen = L * cabin.len;
-  const cabinZ = L * cabin.offset;
-  const cabinY = ride + bodyH + cabinH / 2 - bodyH * 0.08;
   const noseZ = L / 2;
   const tailZ = -L / 2;
-  const glassColor = spec.glass;
+  const bodyColor = spec.color;
+  const trim = spec.trim;
+  const glass = spec.glass;
+  const has = (part: DrivePart) => look.parts.includes(part);
+
+  const cabin = CABIN[look.roof];
+  const cabinH = H * look.roofHeight;
+  const cabinLen = L * cabin.len;
+  const cabinZ = L * cabin.offset;
+  const cabinY = ride + bodyH * 0.94 + cabinH / 2;
+  const roofY = cabinY + cabinH / 2;
+  const wheelX = W / 2 - spec.wheel.width * 0.35;
+  const wheelZ = L * 0.31;
+
+  const lightColor = "#fff6d5";
+  const lightEmissive = "#ffe9a8";
+  const tailColor = "#ff3b30";
+  const tailEmissive = "#ff1a10";
+
+  // --- нос: у каждой модели своя форма передка ---
+  const nose = (() => {
+    switch (look.nose) {
+      case "flat":
+        return <Box size={[W * 0.95, bodyH * 0.9, L * 0.28]} pos={[0, bodyY + bodyH * 0.06, noseZ - L * 0.14]} color={bodyColor} />;
+      case "blunt":
+        return (
+          <>
+            <Box size={[W * 0.97, bodyH * 1.02, L * 0.22]} pos={[0, bodyY + bodyH * 0.1, noseZ - L * 0.11]} color={bodyColor} />
+            <Box size={[W * 0.99, bodyH * 0.16, 0.1]} pos={[0, bodyY - bodyH * 0.28, noseZ + 0.02]} color={trim} metalness={0.85} roughness={0.3} />
+          </>
+        );
+      case "sloped":
+        return (
+          <>
+            <Box size={[W * 0.94, bodyH * 0.55, L * 0.34]} pos={[0, bodyY + bodyH * 0.22, noseZ - L * 0.17]} color={bodyColor} rot={[-0.08, 0, 0]} />
+            <Box size={[W * 0.92, bodyH * 0.2, L * 0.1]} pos={[0, bodyY - bodyH * 0.16, noseZ - L * 0.03]} color={bodyColor} />
+          </>
+        );
+      case "wedge":
+        return (
+          <>
+            <Box size={[W * 0.97, bodyH * 0.52, L * 0.36]} pos={[0, bodyY - bodyH * 0.14, noseZ - L * 0.18]} color={bodyColor} />
+            <Box size={[W * 0.9, bodyH * 0.26, L * 0.2]} pos={[0, bodyY + bodyH * 0.16, noseZ - L * 0.28]} color={bodyColor} rot={[-0.16, 0, 0]} />
+          </>
+        );
+      case "round":
+        return (
+          <>
+            <Box size={[W * 0.94, bodyH * 0.82, L * 0.24]} pos={[0, bodyY, noseZ - L * 0.12]} color={bodyColor} />
+            <mesh position={[0, bodyY, noseZ - 0.01]} rotation={[0, 0, Math.PI / 2]} castShadow>
+              <cylinderGeometry args={[bodyH * 0.4, bodyH * 0.4, W * 0.94, 16, 1, false, 0, Math.PI]} />
+              <meshStandardMaterial color={bodyColor} metalness={0.6} roughness={0.35} />
+            </mesh>
+          </>
+        );
+    }
+  })();
+
+  // --- корма: седан с багажником, лифтбек со скосом, универсал/рамник до крыши ---
+  const tail = (() => {
+    if (look.roof === "notch") {
+      return <Box size={[W * 0.93, bodyH * 0.5, L * 0.26]} pos={[0, bodyY + bodyH * 0.16, tailZ + L * 0.14]} color={bodyColor} />;
+    }
+    if (look.roof === "fastback" || look.roof === "coupe") {
+      return (
+        <Box
+          size={[W * 0.9, bodyH * 0.34, L * 0.4]}
+          pos={[0, bodyY + bodyH * 0.28, tailZ + L * 0.2]}
+          color={bodyColor}
+          rot={[0.16, 0, 0]}
+        />
+      );
+    }
+    if (look.roof === "hatch") {
+      return <Box size={[W * 0.92, bodyH * 0.72, L * 0.16]} pos={[0, bodyY + bodyH * 0.14, tailZ + L * 0.08]} color={bodyColor} />;
+    }
+    return null;
+  })();
+
+  // --- фары: круглые, прямоугольные, четырёхблочные, лента, «слепые» pop-up ---
+  const lights = (() => {
+    const y = bodyY + bodyH * 0.26;
+    const z = noseZ + 0.03;
+    switch (look.lights) {
+      case "round":
+        return [-0.33, 0.33].map((x) => (
+          <mesh key={`r${x}`} position={[x * W, y, z]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[H * 0.075, H * 0.075, 0.08, 16]} />
+            <meshStandardMaterial color={lightColor} emissive={lightEmissive} emissiveIntensity={1.6} />
+          </mesh>
+        ));
+      case "rect":
+        return [-0.32, 0.32].map((x) => (
+          <Box key={`h${x}`} size={[W * 0.22, H * 0.075, 0.07]} pos={[x * W, y, z]} color={lightColor} emissive={lightEmissive} emissiveIntensity={1.5} metalness={0.2} roughness={0.2} />
+        ));
+      case "quad":
+        return [-0.44, -0.28, 0.28, 0.44].map((x) => (
+          <Box key={`q${x}`} size={[W * 0.12, H * 0.065, 0.07]} pos={[x * W, y, z]} color={lightColor} emissive={lightEmissive} emissiveIntensity={1.5} metalness={0.2} roughness={0.2} />
+        ));
+      case "strip":
+        return (
+          <Box size={[W * 0.8, H * 0.045, 0.06]} pos={[0, y, z]} color={lightColor} emissive={lightEmissive} emissiveIntensity={1.7} metalness={0.2} roughness={0.2} />
+        );
+      case "popup":
+        return (
+          <>
+            {[-0.34, 0.34].map((x) => (
+              <group key={`p${x}`}>
+                <Box size={[W * 0.22, H * 0.05, L * 0.1]} pos={[x * W, bodyY + bodyH * 0.42, noseZ - L * 0.1]} color={bodyColor} />
+                <Box size={[W * 0.18, H * 0.028, 0.04]} pos={[x * W, bodyY + bodyH * 0.44, noseZ - L * 0.06]} color={lightColor} emissive={lightEmissive} emissiveIntensity={1.4} metalness={0.2} roughness={0.2} />
+              </group>
+            ))}
+          </>
+        );
+    }
+  })();
+
+  // --- решётка радиатора: у каждой марки своя ---
+  const grille = (() => {
+    const y = bodyY + bodyH * 0.02;
+    const z = noseZ + 0.02;
+    switch (look.grille) {
+      case "none":
+        return null;
+      case "narrow":
+        return <Box size={[W * 0.32, H * 0.07, 0.05]} pos={[0, y, z]} color="#101215" metalness={0.7} roughness={0.45} />;
+      case "wide":
+        return <Box size={[W * 0.6, H * 0.1, 0.05]} pos={[0, y, z]} color="#0c0e12" metalness={0.7} roughness={0.45} />;
+      case "mesh":
+        return <Box size={[W * 0.58, H * 0.13, 0.05]} pos={[0, y, z]} color="#0a0c10" metalness={0.85} roughness={0.5} />;
+      case "chrome":
+        return <Box size={[W * 0.44, H * 0.08, 0.05]} pos={[0, y, z]} color={trim} metalness={0.95} roughness={0.2} />;
+      case "kidney":
+        return [-0.1, 0.1].map((x) => (
+          <Box key={`k${x}`} size={[W * 0.15, H * 0.1, 0.05]} pos={[x * W, y, z]} color={trim} metalness={0.95} roughness={0.2} />
+        ));
+      case "panamericana":
+        return Array.from({ length: 5 }, (_, i) => (
+          <Box key={`pam${i}`} size={[W * 0.03, H * 0.12, 0.045]} pos={[(i - 2) * W * 0.11, y, z]} color={trim} metalness={0.95} roughness={0.18} />
+        ));
+    }
+  })();
 
   return (
     <group>
-      {/* нижняя часть кузова */}
+      {/* основной корпус */}
       <mesh position={[0, bodyY, 0]} castShadow receiveShadow>
-        <boxGeometry args={[W, bodyH, L]} />
-        <meshStandardMaterial color={spec.color} metalness={0.62} roughness={0.34} />
+        <boxGeometry args={[W, bodyH, L * 0.96]} />
+        <meshStandardMaterial color={bodyColor} metalness={0.62} roughness={0.34} />
       </mesh>
-      {/* капот спереди (+Z) и багажник/корма сзади (-Z) */}
-      <mesh position={[0, bodyY + bodyH * 0.32, noseZ - L * 0.22]} castShadow>
-        <boxGeometry args={[W * 0.92, bodyH * 0.3, L * 0.3]} />
-        <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.36} />
-      </mesh>
-      {spec.body !== "hatch" && spec.body !== "suv" && (
-        <mesh position={[0, bodyY + bodyH * 0.3, tailZ + L * 0.16]} castShadow>
-          <boxGeometry args={[W * 0.92, bodyH * 0.26, L * 0.24]} />
-          <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.36} />
-        </mesh>
-      )}
-      {/* кабина */}
+      {nose}
+      {tail}
+
+      {/* кабина и стёкла */}
       <mesh position={[0, cabinY, cabinZ]} castShadow>
         <boxGeometry args={[W * 0.86, cabinH, cabinLen]} />
-        <meshStandardMaterial color={spec.color} metalness={0.55} roughness={0.4} />
+        <meshStandardMaterial color={bodyColor} metalness={0.55} roughness={0.4} />
       </mesh>
-      {/* стёкла */}
-      <mesh position={[0, cabinY + cabinH * 0.1, cabinZ]}>
-        <boxGeometry args={[W * 0.88, cabinH * 0.62, cabinLen * 0.94]} />
-        <meshStandardMaterial color={glassColor} metalness={0.9} roughness={0.08} />
+      <mesh position={[0, cabinY + cabinH * 0.06, cabinZ]}>
+        <boxGeometry args={[W * 0.88, cabinH * 0.58, cabinLen * 0.94]} />
+        <meshStandardMaterial color={glass} metalness={0.9} roughness={0.08} />
       </mesh>
+      {/* лобовое стекло под своим углом для каждой модели */}
+      <Box
+        size={[W * 0.8, cabinH * 0.9, 0.05]}
+        pos={[0, cabinY + cabinH * 0.02, cabinZ + cabinLen / 2 - 0.02]}
+        color={glass}
+        metalness={0.9}
+        roughness={0.08}
+        rot={[-0.35 - look.windshield * 0.5, 0, 0]}
+      />
+      {look.roof !== "box" && (
+        <Box
+          size={[W * 0.78, cabinH * 0.72, 0.05]}
+          pos={[0, cabinY + cabinH * 0.02, cabinZ - cabinLen / 2 + 0.02]}
+          color={glass}
+          metalness={0.9}
+          roughness={0.08}
+          rot={[0.3 + look.windshield * 0.35, 0, 0]}
+        />
+      )}
+
       {/* акцентная полоса по борту */}
-      <mesh position={[0, bodyY + bodyH * 0.1, 0]}>
-        <boxGeometry args={[W * 1.01, Math.max(0.04, H * 0.05), L * 0.86]} />
+      <mesh position={[0, bodyY + bodyH * 0.08, 0]}>
+        <boxGeometry args={[W * 1.005, Math.max(0.035, H * 0.045), L * 0.86]} />
         <meshStandardMaterial color={spec.accent} emissive={spec.accent} emissiveIntensity={0.25} roughness={0.4} />
       </mesh>
-      {/* фары (нос, +Z) */}
-      {[-0.62, 0.62].map((x) => (
-        <mesh key={`hl${x}`} position={[x * W * 0.72, bodyY + bodyH * 0.34, noseZ + 0.02]}>
-          <boxGeometry args={[W * 0.2, H * 0.09, 0.07]} />
-          <meshStandardMaterial color="#fff6d5" emissive="#ffe9a8" emissiveIntensity={1.6} />
-        </mesh>
-      ))}
+
+      {/* расширенные арки: широкий обвес видно издалека */}
+      {(look.fenders > 1.01 || has("wideBody")) &&
+        WHEELS.map((w) => (
+          <Box
+            key={`flare${w.key}`}
+            size={[0.09 + (has("wideBody") ? 0.05 : 0), bodyH * 0.62, R * 2.35]}
+            pos={[w.x * (W / 2 + 0.02), bodyY - bodyH * 0.04, w.z * wheelZ]}
+            color={has("wideBody") ? spec.accent : bodyColor}
+            metalness={0.55}
+            roughness={0.42}
+          />
+        ))}
+
+      {/* фары и решётка */}
+      {lights}
+      {grille}
+
       {/* стопы (корма, -Z) */}
       {[-0.62, 0.62].map((x) => (
-        <mesh key={`tl${x}`} position={[x * W * 0.72, bodyY + bodyH * 0.34, tailZ - 0.02]}>
+        <mesh key={`tl${x}`} position={[x * W * 0.72, bodyY + bodyH * 0.32, tailZ - 0.02]}>
           <boxGeometry args={[W * 0.2, H * 0.08, 0.07]} />
-          <meshStandardMaterial color="#ff3b30" emissive="#ff1a10" emissiveIntensity={1.3} />
+          <meshStandardMaterial color={tailColor} emissive={tailEmissive} emissiveIntensity={1.3} />
         </mesh>
       ))}
+
       {/* антикрыло / спойлер */}
       {spec.spoiler === "lip" && (
-        <mesh position={[0, bodyY + bodyH * 0.52, tailZ + L * 0.04]} castShadow>
-          <boxGeometry args={[W * 0.8, H * 0.05, L * 0.12]} />
-          <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.4} />
-        </mesh>
+        <Box size={[W * 0.8, H * 0.05, L * 0.12]} pos={[0, bodyY + bodyH * 0.52, tailZ + L * 0.04]} color={bodyColor} metalness={0.6} roughness={0.4} />
       )}
       {spec.spoiler !== "lip" && spec.spoiler !== "none" && (
         <group position={[0, bodyY + bodyH * 0.5, tailZ + L * 0.02]}>
-          <mesh position={[0, H * 0.16, 0]} castShadow>
-            <boxGeometry args={[W * (spec.spoiler === "big" ? 0.98 : 0.82), H * 0.045, L * 0.13]} />
-            <meshStandardMaterial color={spec.color} metalness={0.7} roughness={0.3} />
-          </mesh>
+          <Box
+            size={[W * (spec.spoiler === "big" ? 0.98 : 0.82), H * 0.045, L * 0.13]}
+            pos={[0, H * 0.16, 0]}
+            color={bodyColor}
+            metalness={0.7}
+            roughness={0.3}
+          />
           {[-0.32, 0.32].map((x) => (
-            <mesh key={`sup${x}`} position={[x * W, H * 0.08, 0]}>
-              <boxGeometry args={[W * 0.05, H * 0.16, L * 0.06]} />
-              <meshStandardMaterial color={spec.trim} metalness={0.8} roughness={0.35} />
-            </mesh>
+            <Box key={`sup${x}`} size={[W * 0.05, H * 0.16, L * 0.06]} pos={[x * W, H * 0.08, 0]} color={trim} metalness={0.8} roughness={0.35} />
           ))}
         </group>
       )}
-      {/* полосы маслкара */}
-      {spec.extras.stripes &&
-        [-0.16, 0.16].map((x) => (
-          <mesh key={`stripe${x}`} position={[x * W, ride + bodyH + 0.01, 0]}>
-            <boxGeometry args={[W * 0.1, 0.02, L * 0.94]} />
-            <meshStandardMaterial color={spec.accent} roughness={0.45} />
-          </mesh>
-        ))}
-      {/* кенгурятник у G-класса */}
-      {spec.extras.bullBar && (
-        <group position={[0, ride + bodyH * 0.2, noseZ + 0.08]}>
-          <mesh>
-            <boxGeometry args={[W * 0.9, H * 0.04, 0.06]} />
-            <meshStandardMaterial color={spec.trim} metalness={0.9} roughness={0.3} />
-          </mesh>
-          <mesh>
-            <boxGeometry args={[W * 0.9, H * 0.04, 0.06]} />
-            <meshStandardMaterial color={spec.trim} metalness={0.9} roughness={0.3} />
-          </mesh>
-        </group>
+
+      {/* --- фирменные детали модели --- */}
+      {has("chromeBumpers") && (
+        <>
+          <Box size={[W * 0.98, H * 0.07, 0.1]} pos={[0, ride + bodyH * 0.22, noseZ - 0.01]} color={trim} metalness={0.95} roughness={0.18} />
+          <Box size={[W * 0.98, H * 0.07, 0.1]} pos={[0, ride + bodyH * 0.22, tailZ + 0.01]} color={trim} metalness={0.95} roughness={0.18} />
+        </>
       )}
-      {/* багажник на крыше и балка света */}
-      {spec.extras.roofRack &&
-        [-0.34, 0.34].map((x) => (
-          <mesh key={`rail${x}`} position={[x * W, cabinY + cabinH * 0.52, cabinZ]}>
-            <boxGeometry args={[W * 0.06, H * 0.04, cabinLen * 0.92]} />
-            <meshStandardMaterial color={spec.trim} metalness={0.85} roughness={0.3} />
-          </mesh>
-        ))}
-      {spec.extras.lightBar && (
-        <mesh position={[0, cabinY + cabinH * 0.6, cabinZ + cabinLen * 0.4]}>
-          <boxGeometry args={[W * 0.6, H * 0.05, 0.08]} />
-          <meshStandardMaterial color="#fffbe8" emissive="#fff2b0" emissiveIntensity={1.4} />
+      {has("towHook") && (
+        <mesh position={[W * 0.3, ride + 0.06, noseZ + 0.04]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.035, 0.035, 0.14, 10]} />
+          <meshStandardMaterial color={spec.accent} metalness={0.7} roughness={0.35} />
         </mesh>
       )}
-      {/* подсветка днища у WERT Edition */}
-      {spec.extras.underglow && (
-        <mesh position={[0, ride * 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      {has("sideSkirt") &&
+        [-1, 1].map((side) => (
+          <Box key={`skirt${side}`} size={[0.07, bodyH * 0.2, L * 0.52]} pos={[side * (W / 2), ride + bodyH * 0.14, 0]} color={bodyColor} metalness={0.5} roughness={0.5} />
+        ))}
+      {has("hoodScoop") && (
+        <Box size={[W * 0.26, H * 0.05, L * 0.14]} pos={[0, ride + bodyH + 0.03, noseZ - L * 0.24]} color={bodyColor} metalness={0.55} roughness={0.45} />
+      )}
+      {has("nacaDuct") && (
+        <Box size={[W * 0.3, 0.03, L * 0.1]} pos={[0, ride + bodyH + 0.02, noseZ - L * 0.3]} color="#0a0b0d" metalness={0.4} roughness={0.7} />
+      )}
+      {has("vents") &&
+        [-1, 1].map((side) =>
+          [0, 1, 2].map((i) => (
+            <Box key={`vent${side}${i}`} size={[W * 0.09, 0.02, 0.05]} pos={[side * W * 0.3, ride + bodyH + 0.02, tailZ + L * 0.32 - i * 0.08]} color="#0a0b0d" metalness={0.5} roughness={0.6} />
+          )),
+        )}
+      {has("splitter") && (
+        <Box size={[W * 0.94, 0.04, L * 0.16]} pos={[0, ride + 0.04, noseZ - L * 0.05]} color={trim} metalness={0.8} roughness={0.3} />
+      )}
+      {has("diffuser") && (
+        <>
+          <Box size={[W * 0.82, H * 0.06, L * 0.1]} pos={[0, ride + 0.05, tailZ + L * 0.06]} color="#0a0b0d" metalness={0.6} roughness={0.5} />
+          {[-0.28, 0, 0.28].map((x) => (
+            <Box key={`fin${x}`} size={[0.03, H * 0.06, L * 0.09]} pos={[x * W, ride + 0.09, tailZ + L * 0.06]} color={trim} metalness={0.8} roughness={0.3} />
+          ))}
+        </>
+      )}
+      {has("canards") &&
+        [-1, 1].map((side) =>
+          [0, 1].map((i) => (
+            <Box key={`can${side}${i}`} size={[W * 0.16, 0.02, 0.09]} pos={[side * (W / 2 + 0.04), ride + bodyH * 0.3 + i * 0.09, noseZ - L * 0.06]} color={trim} metalness={0.85} roughness={0.3} />
+          )),
+        )}
+      {has("snorkel") && (
+        <Box size={[0.09, H * 0.52, 0.1]} pos={[W * 0.42, cabinY, cabinZ + cabinLen * 0.42]} color={trim} metalness={0.85} roughness={0.3} />
+      )}
+      {has("spareWheel") && (
+        <mesh position={[0, bodyY + bodyH * 0.2, tailZ - 0.1]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[R * 0.85, R * 0.85, 0.18, 20]} />
+          <meshStandardMaterial color="#0d0d10" roughness={0.9} />
+        </mesh>
+      )}
+      {has("roofSpoiler") && (
+        <Box size={[W * 0.82, 0.05, L * 0.09]} pos={[0, roofY + 0.02, cabinZ - cabinLen * 0.44]} color={bodyColor} metalness={0.6} roughness={0.4} />
+      )}
+      {has("rollBar") && (
+        <group position={[0, cabinY, cabinZ - cabinLen * 0.42]}>
+          <Box size={[W * 0.78, 0.06, 0.06]} pos={[0, cabinH * 0.45, 0]} color={trim} metalness={0.9} roughness={0.25} />
+          {[-0.34, 0.34].map((x) => (
+            <Box key={`rb${x}`} size={[0.05, cabinH * 0.9, 0.05]} pos={[x * W, 0, 0]} color={trim} metalness={0.9} roughness={0.25} />
+          ))}
+        </group>
+      )}
+      {has("sidePipes") &&
+        [-1, 1].map((side) => (
+          <mesh key={`sp${side}`} position={[side * (W / 2 + 0.03), ride + bodyH * 0.16, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.05, 0.05, L * 0.5, 12]} />
+            <meshStandardMaterial color={trim} metalness={0.95} roughness={0.22} />
+          </mesh>
+        ))}
+      {has("lightPod") && (
+        <group position={[0, roofY + 0.05, cabinZ + cabinLen * 0.3]}>
+          <Box size={[W * 0.6, 0.07, 0.12]} pos={[0, 0, 0]} color={trim} metalness={0.7} roughness={0.4} />
+          {[-0.24, -0.08, 0.08, 0.24].map((x) => (
+            <Box key={`lp${x}`} size={[0.09, 0.05, 0.04]} pos={[x * W, 0, 0.07]} color="#fffbe8" emissive="#fff2b0" emissiveIntensity={1.5} metalness={0.2} roughness={0.2} />
+          ))}
+        </group>
+      )}
+      {has("bullBar") && (
+        <group position={[0, ride + bodyH * 0.16, noseZ + 0.08]}>
+          {[0, 1].map((i) => (
+            <Box key={`bb${i}`} size={[W * 0.9, 0.05, 0.06]} pos={[0, i * 0.18, 0]} color={trim} metalness={0.9} roughness={0.3} />
+          ))}
+          {[-0.34, 0, 0.34].map((x) => (
+            <Box key={`bv${x}`} size={[0.05, 0.24, 0.05]} pos={[x * W, 0.09, 0]} color={trim} metalness={0.9} roughness={0.3} />
+          ))}
+        </group>
+      )}
+      {has("roofRack") &&
+        [-0.34, 0.34].map((x) => (
+          <Box key={`rail${x}`} size={[W * 0.06, 0.04, cabinLen * 0.92]} pos={[x * W, roofY + 0.03, cabinZ]} color={trim} metalness={0.85} roughness={0.3} />
+        ))}
+      {has("lightBar") && (
+        <Box size={[W * 0.6, 0.05, 0.08]} pos={[0, roofY + 0.06, cabinZ + cabinLen * 0.42]} color="#fffbe8" emissive="#fff2b0" emissiveIntensity={1.4} metalness={0.2} roughness={0.2} />
+      )}
+      {has("sunroof") && (
+        <Box size={[W * 0.5, 0.02, cabinLen * 0.34]} pos={[0, roofY + 0.01, cabinZ + cabinLen * 0.1]} color={glass} metalness={0.9} roughness={0.08} />
+      )}
+      {has("stripes") &&
+        [-0.16, 0.16].map((x) => (
+          <Box key={`stripe${x}`} size={[W * 0.1, 0.02, L * 0.94]} pos={[x * W, ride + bodyH + 0.01, 0]} color={spec.accent} metalness={0.3} roughness={0.45} />
+        ))}
+      {has("underglow") && (
+        <mesh position={[0, ride * 0.3, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[W * 1.1, L * 0.9]} />
           <meshBasicMaterial color={spec.accent} transparent opacity={0.35} />
         </mesh>
       )}
-      {/* выхлоп */}
-      {[-0.34, 0.34].map((x) => (
-        <mesh key={`ex${x}`} position={[x * W, ride + bodyH * 0.1, tailZ - 0.06]} rotation={[Math.PI / 2, 0, 0]}>
+
+      {/* выхлоп: у заряженных версий четыре трубы */}
+      {(has("quadExhaust") ? [-0.42, -0.26, 0.26, 0.42] : [-0.34, 0.34]).map((x) => (
+        <mesh key={`ex${x}`} position={[x * W, ride + bodyH * 0.12, tailZ - 0.06]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.07, 0.07, 0.16, 12]} />
-          <meshStandardMaterial color={spec.trim} metalness={0.95} roughness={0.25} />
+          <meshStandardMaterial color={trim} metalness={0.95} roughness={0.25} />
         </mesh>
       ))}
     </group>
@@ -275,6 +530,8 @@ function Vehicle({ car, ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps)
     camera.lookAt(v.x + Math.sin(v.yaw) * 3, 1.1, v.z + Math.cos(v.yaw) * 3);
     if (speedRef.current) speedRef.current.textContent = String(Math.round(v.speed * 3.6));
     if (slipRef.current) slipRef.current.textContent = v.slip > 0.12 ? `ДРИФТ · ${Math.round(v.slip * 180 / Math.PI)}°` : "Сцепление";
+    // Какая именно модель сейчас на трассе — видно снаружи и в браузерной проверке.
+    if (gl.domElement.dataset['carModel'] !== spec.modelId) gl.domElement.dataset['carModel'] = spec.modelId;
     // This callback runs before rendering: mark ready on the following frame.
     if (ready.current) gl.domElement.dataset['sceneReady'] = "1";
     ready.current = true;
