@@ -54,12 +54,9 @@ function AuthPage() {
     }
     setBusy(true);
     try {
-      // Пароль сохраняем при первом входе, но пускаем по коду из письма.
-      if (password.trim().length >= 6) {
-        const { error } = await supabase.auth.signUp({ email: email.trim(), password });
-        // «Уже зарегистрирован» не мешает: код отправим всё равно.
-        if (error && !/registered|exists/i.test(error.message)) throw error;
-      }
+      // Пароль применим после подтверждения кодом: так письмо с кодом уходит
+      // сразу, без лишнего письма-подтверждения регистрации и лишней задержки.
+      setPendingPassword(password.trim().length >= 6 ? password : null);
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
@@ -87,6 +84,16 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" });
       if (error) throw error;
+      if (pendingPassword) {
+        // Пароль нужен для входа без кода. Вход уже состоялся, поэтому ошибку
+        // сохранения пароля не показываем как провал входа.
+        try {
+          await supabase.auth.updateUser({ password: pendingPassword });
+        } catch {
+          /* пароль не сохранился — вход по коду всё равно работает */
+        }
+        setPendingPassword(null);
+      }
       toast.success("Готово, ты в игре");
       navigate({ to: "/" });
     } catch (e) {
