@@ -13,6 +13,7 @@ import {
   buyBlackItem,
   dealsLeaderboard,
   openSellerChat,
+  playerRating,
   sellerChat,
   talkToSeller,
 } from "@/game/black";
