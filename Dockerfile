@@ -14,8 +14,13 @@ ENV NITRO_PRESET=node-server
 RUN bun run build
 
 # ---------- runtime ----------
-FROM node:26-alpine
-RUN apk upgrade --no-cache
+# Debian-based image: the Alpine v3.24 node base still ships a blocking zlib CVE
+# (ALPINE-CVE-2026-4738) whose fix is not in the v3.24 repository yet.
+FROM node:26-trixie-slim
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
