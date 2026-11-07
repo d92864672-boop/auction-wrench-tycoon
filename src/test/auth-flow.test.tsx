@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithOtp: vi.fn(),
   verifyOtp: vi.fn(),
+  updateUser: vi.fn(),
   getSession: vi.fn(),
   signInWithGoogle: vi.fn(),
   fetchGoogleStatus: vi.fn(),

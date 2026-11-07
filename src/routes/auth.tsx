@@ -26,6 +26,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  // Пароль, который применим после подтверждения кодом (вход без кода потом).
+  const [pendingPassword, setPendingPassword] = useState<string | null>(null);
   const [passwordLogin, setPasswordLogin] = useState(false);
   const [google, setGoogle] = useState<{ available: boolean; reason: string | null } | null>(null);
 
