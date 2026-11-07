@@ -86,7 +86,8 @@ describe("Вход в игру", () => {
   it("не отправляет код на некорректную почту", async () => {
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(field(container, 'input[type="email"]'), { target: { value: "не-почта" } });
+    // Валиден для type="email", но без домена верхнего уровня — приложение такое не примет.
+    fireEvent.change(field(container, 'input[type="email"]'), { target: { value: "player@wert" } });
     fireEvent.click(screen.getByRole("button", { name: /Получить код на почту/ }));
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("Введи корректную почту"));
