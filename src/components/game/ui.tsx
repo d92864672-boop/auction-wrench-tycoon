@@ -6,7 +6,7 @@ export function Section({ title, children, right }: { title?: string; children: 
     <section className="space-y-2">
       {title && (
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+          <h3 className="text-xs font-semibold tracking-wider text-muted-foreground">{title}</h3>
           {right}
         </div>
       )}
