@@ -84,10 +84,12 @@ function Drive({ car, mode, setMode, exit }: { car: Car; mode: DriveMode; setMod
   );
   return createPortal(
     <div className="fixed inset-0 z-50 bg-background">
-      <ClientOnly fallback={<Empty>Загрузка…</Empty>}><Suspense fallback={<Empty>Загрузка…</Empty>}>
-        <DriveScene car={car} ctl={ctl} modeRef={modeRef} speedRef={speedRef} slipRef={slipRef} resetRef={resetRef} />
-      </Suspense></ClientOnly>
-      <div className="absolute inset-x-3 top-3 mx-auto max-w-lg space-y-2">
+      <div className="absolute inset-0 z-0">
+        <ClientOnly fallback={<Empty>Загрузка…</Empty>}><Suspense fallback={<Empty>Загрузка…</Empty>}>
+          <DriveScene car={car} ctl={ctl} modeRef={modeRef} speedRef={speedRef} slipRef={slipRef} resetRef={resetRef} />
+        </Suspense></ClientOnly>
+      </div>
+      <div className="absolute inset-x-3 top-3 z-20 mx-auto max-w-lg space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 rounded-lg bg-background/80 px-3 py-2 backdrop-blur">
             <p className="truncate text-xs">{car.name} · {car.year}</p>
