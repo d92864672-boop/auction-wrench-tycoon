@@ -10,6 +10,17 @@ import { Empty, Tile } from "./ui";
 
 const DriveScene = lazy(() => import("./drive-scene"));
 
+// Бесплатная машина для тест-драйва: «Покатушки» должны работать сразу,
+// даже если гараж пуст и игрок ещё ничего не купил.
+const DEMO_CAR: Car = {
+  id: "demo-drive",
+  modelId: "demo-drive",
+  name: "Тестовая тачка",
+  year: 1998,
+  mileage: 250000,
+  condition: 70,
+};
+
 export function DriveApp() {
   const { state } = useGame();
   const [car, setCar] = useState<Car | null>(null);
@@ -18,7 +29,13 @@ export function DriveApp() {
   return (
     <div className="space-y-3">
       <DriveSelector mode={mode} setMode={setMode} />
-      {state.garage.length === 0 && <Empty>В гараже нет машин — купи в Перекупе</Empty>}
+      {state.garage.length === 0 && <Empty>Гараж пуст — катайся на тестовой машине или купи свою в Перекупе</Empty>}
+      {state.garage.length === 0 && (
+        <Tile className="flex items-center justify-between gap-2">
+          <span className="min-w-0 text-sm">{DEMO_CAR.name} {DEMO_CAR.year}</span>
+          <Button size="sm" onClick={() => setCar(DEMO_CAR)}>Кататься</Button>
+        </Tile>
+      )}
       {state.garage.map((c) => (
         <Tile key={c.id} className="flex items-center justify-between gap-2">
           <span className="min-w-0 text-sm">{c.name} {c.year}</span>
