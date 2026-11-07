@@ -53,6 +53,9 @@ describe("Вход в игру", () => {
     mocks.fetchGoogleStatus.mockResolvedValue({ available: false, reason: "Google не включён" });
     mocks.signUp.mockResolvedValue({ error: null });
     mocks.signInWithOtp.mockResolvedValue({ error: null });
+    // Supabase-клиент всегда возвращает объект: без него деструктуризация падает.
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+    mocks.updateUser.mockResolvedValue({ error: null });
   });
 
   it("после отправки открывает шаг с кодом из письма", async () => {
