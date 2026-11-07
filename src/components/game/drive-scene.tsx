@@ -2,82 +2,274 @@ import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
-import { newDrive, stepDrive, type Controls, type DriveMode } from "@/game/drive-physics";
+import {
+  frontWheelSteer,
+  newDrive,
+  stepDrive,
+  wheelSpinDelta,
+  type Controls,
+  type DriveMode,
+} from "@/game/drive-physics";
+import { driveSpec, topSpeedMs, type DriveSpec } from "@/game/drive-cars";
+import type { Car } from "@/game/engine";
 
 function palette() {
   const css = getComputedStyle(document.documentElement);
   const read = (key: string) => css.getPropertyValue(`--drive-${key}`).trim();
   return { sky: read("sky"), asphalt: read("asphalt"), line: read("line"), grass: read("grass"), building: read("building"), window: read("window"), sun: read("sun") };
 }
-type SceneProps = { ctl: RefObject<Controls>; modeRef: RefObject<DriveMode>; speedRef: RefObject<HTMLSpanElement | null>; slipRef: RefObject<HTMLSpanElement | null>; resetRef: RefObject<boolean> };
 
-const WHEEL_NAMES = ["wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right"] as const;
-const WHEELS: { name: (typeof WHEEL_NAMES)[number]; position: [number, number, number] }[] = [
-  { name: "wheel-front-left", position: [-0.92, 0.5, -1.35] },
-  { name: "wheel-front-right", position: [0.92, 0.5, -1.35] },
-  { name: "wheel-back-left", position: [-0.92, 0.5, 1.4] },
-  { name: "wheel-back-right", position: [0.92, 0.5, 1.4] },
-];
+type SceneProps = {
+  car: Car;
+  ctl: RefObject<Controls>;
+  modeRef: RefObject<DriveMode>;
+  speedRef: RefObject<HTMLSpanElement | null>;
+  slipRef: RefObject<HTMLSpanElement | null>;
+  resetRef: RefObject<boolean>;
+};
 
-/** Колесо: покрышка + диск + спица, чтобы вращение было видно. */
-function Wheel({ name, position }: { name: string; position: [number, number, number] }) {
+const WHEELS = [
+  { key: "fl", x: -1, z: 1, steer: true },
+  { key: "fr", x: 1, z: 1, steer: true },
+  { key: "bl", x: -1, z: -1, steer: false },
+  { key: "br", x: 1, z: -1, steer: false },
+] as const;
+const WHEEL_KEYS = WHEELS.map((w) => w.key);
+
+/** Пропорции кабины по типу кузова: длина/высота как доля габаритов, сдвиг по Z. */
+const CABIN: Record<DriveSpec["body"], { h: number; len: number; offset: number }> = {
+  classic: { h: 0.36, len: 0.44, offset: 0.02 },
+  sedan: { h: 0.32, len: 0.46, offset: 0.04 },
+  hatch: { h: 0.36, len: 0.5, offset: 0.16 },
+  coupe: { h: 0.27, len: 0.42, offset: 0.08 },
+  muscle: { h: 0.26, len: 0.4, offset: 0.1 },
+  suv: { h: 0.4, len: 0.56, offset: 0.06 },
+  super: { h: 0.24, len: 0.36, offset: 0.08 },
+};
+
+/** Колесо: покрышка, диск и спицы, чтобы вращение было видно. */
+function Wheel({
+  spec,
+  position,
+  spinRef,
+  steerRef,
+}: {
+  spec: DriveSpec;
+  position: [number, number, number];
+  spinRef: (o: THREE.Group | null) => void;
+  steerRef: (o: THREE.Group | null) => void;
+}) {
+  const { radius: R, width: Wd } = spec.wheel;
   return (
-    <group name={name} position={position}>
-      <mesh castShadow rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.5, 0.5, 0.34, 24]} />
-        <meshStandardMaterial color="#0d0d10" roughness={0.9} />
+    <group position={position}>
+      <group ref={steerRef}>
+        <group ref={spinRef}>
+          <mesh castShadow rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[R, R, Wd, 24]} />
+            <meshStandardMaterial color="#0d0d10" roughness={0.92} />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[R * 0.62, R * 0.62, Wd * 1.04, 20]} />
+            <meshStandardMaterial color={spec.trim} metalness={0.95} roughness={0.22} />
+          </mesh>
+          {[0, 1, 2, 3].map((i) => (
+            <mesh key={i} rotation={[(i * Math.PI) / 4, 0, 0]}>
+              <boxGeometry args={[Wd * 0.9, R * 1.7, 0.05]} />
+              <meshStandardMaterial color={spec.trim} metalness={0.85} roughness={0.3} />
+            </mesh>
+          ))}
+        </group>
+      </group>
+    </group>
+  );
+}
+
+/**
+ * Кузов собирается из примитивов по профилю машины: у каждой модели свой
+ * силуэт (классика, седан, хэтч, купе, маслкар, внедорожник, суперкар),
+ * цвет, габариты, колёса и детали вроде антикрыла или кенгурятника.
+ * Нос машины смотрит в +Z — туда же, куда едет физика.
+ */
+function CarBody({ spec }: { spec: DriveSpec }) {
+  const { length: L, width: W, height: H } = spec.size;
+  const cabin = CABIN[spec.body];
+  const ride = spec.wheel.radius * (spec.body === "suv" ? 0.72 : 0.5);
+  const bodyH = H * 0.42;
+  const bodyY = ride + bodyH / 2;
+  const cabinH = H * cabin.h;
+  const cabinLen = L * cabin.len;
+  const cabinZ = L * cabin.offset;
+  const cabinY = ride + bodyH + cabinH / 2 - bodyH * 0.08;
+  const noseZ = L / 2;
+  const tailZ = -L / 2;
+  const glassColor = spec.glass;
+
+  return (
+    <group>
+      {/* нижняя часть кузова */}
+      <mesh position={[0, bodyY, 0]} castShadow receiveShadow>
+        <boxGeometry args={[W, bodyH, L]} />
+        <meshStandardMaterial color={spec.color} metalness={0.62} roughness={0.34} />
       </mesh>
-      <mesh rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.29, 0.29, 0.36, 20]} />
-        <meshStandardMaterial color="#c7ccd6" metalness={0.95} roughness={0.22} />
+      {/* капот спереди (+Z) и багажник/корма сзади (-Z) */}
+      <mesh position={[0, bodyY + bodyH * 0.32, noseZ - L * 0.22]} castShadow>
+        <boxGeometry args={[W * 0.92, bodyH * 0.3, L * 0.3]} />
+        <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.36} />
       </mesh>
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} rotation={[(i * Math.PI) / 3, 0, Math.PI / 2]} position={[0, 0, 0]}>
-          <boxGeometry args={[0.06, 0.52, 0.36]} />
-          <meshStandardMaterial color="#8b929f" metalness={0.85} roughness={0.3} />
+      {spec.body !== "hatch" && spec.body !== "suv" && (
+        <mesh position={[0, bodyY + bodyH * 0.3, tailZ + L * 0.16]} castShadow>
+          <boxGeometry args={[W * 0.92, bodyH * 0.26, L * 0.24]} />
+          <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.36} />
+        </mesh>
+      )}
+      {/* кабина */}
+      <mesh position={[0, cabinY, cabinZ]} castShadow>
+        <boxGeometry args={[W * 0.86, cabinH, cabinLen]} />
+        <meshStandardMaterial color={spec.color} metalness={0.55} roughness={0.4} />
+      </mesh>
+      {/* стёкла */}
+      <mesh position={[0, cabinY + cabinH * 0.1, cabinZ]}>
+        <boxGeometry args={[W * 0.88, cabinH * 0.62, cabinLen * 0.94]} />
+        <meshStandardMaterial color={glassColor} metalness={0.9} roughness={0.08} />
+      </mesh>
+      {/* акцентная полоса по борту */}
+      <mesh position={[0, bodyY + bodyH * 0.1, 0]}>
+        <boxGeometry args={[W * 1.01, Math.max(0.04, H * 0.05), L * 0.86]} />
+        <meshStandardMaterial color={spec.accent} emissive={spec.accent} emissiveIntensity={0.25} roughness={0.4} />
+      </mesh>
+      {/* фары (нос, +Z) */}
+      {[-0.62, 0.62].map((x) => (
+        <mesh key={`hl${x}`} position={[x * W * 0.72, bodyY + bodyH * 0.34, noseZ + 0.02]}>
+          <boxGeometry args={[W * 0.2, H * 0.09, 0.07]} />
+          <meshStandardMaterial color="#fff6d5" emissive="#ffe9a8" emissiveIntensity={1.6} />
+        </mesh>
+      ))}
+      {/* стопы (корма, -Z) */}
+      {[-0.62, 0.62].map((x) => (
+        <mesh key={`tl${x}`} position={[x * W * 0.72, bodyY + bodyH * 0.34, tailZ - 0.02]}>
+          <boxGeometry args={[W * 0.2, H * 0.08, 0.07]} />
+          <meshStandardMaterial color="#ff3b30" emissive="#ff1a10" emissiveIntensity={1.3} />
+        </mesh>
+      ))}
+      {/* антикрыло / спойлер */}
+      {spec.spoiler === "lip" && (
+        <mesh position={[0, bodyY + bodyH * 0.52, tailZ + L * 0.04]} castShadow>
+          <boxGeometry args={[W * 0.8, H * 0.05, L * 0.12]} />
+          <meshStandardMaterial color={spec.color} metalness={0.6} roughness={0.4} />
+        </mesh>
+      )}
+      {spec.spoiler !== "lip" && spec.spoiler !== "none" && (
+        <group position={[0, bodyY + bodyH * 0.5, tailZ + L * 0.02]}>
+          <mesh position={[0, H * 0.16, 0]} castShadow>
+            <boxGeometry args={[W * (spec.spoiler === "big" ? 0.98 : 0.82), H * 0.045, L * 0.13]} />
+            <meshStandardMaterial color={spec.color} metalness={0.7} roughness={0.3} />
+          </mesh>
+          {[-0.32, 0.32].map((x) => (
+            <mesh key={`sup${x}`} position={[x * W, H * 0.08, 0]}>
+              <boxGeometry args={[W * 0.05, H * 0.16, L * 0.06]} />
+              <meshStandardMaterial color={spec.trim} metalness={0.8} roughness={0.35} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {/* полосы маслкара */}
+      {spec.extras.stripes &&
+        [-0.16, 0.16].map((x) => (
+          <mesh key={`stripe${x}`} position={[x * W, ride + bodyH + 0.01, 0]}>
+            <boxGeometry args={[W * 0.1, 0.02, L * 0.94]} />
+            <meshStandardMaterial color={spec.accent} roughness={0.45} />
+          </mesh>
+        ))}
+      {/* кенгурятник у G-класса */}
+      {spec.extras.bullBar && (
+        <group position={[0, ride + bodyH * 0.2, noseZ + 0.08]}>
+          <mesh>
+            <boxGeometry args={[W * 0.9, H * 0.04, 0.06]} />
+            <meshStandardMaterial color={spec.trim} metalness={0.9} roughness={0.3} />
+          </mesh>
+          <mesh>
+            <boxGeometry args={[W * 0.9, H * 0.04, 0.06]} />
+            <meshStandardMaterial color={spec.trim} metalness={0.9} roughness={0.3} />
+          </mesh>
+        </group>
+      )}
+      {/* багажник на крыше и балка света */}
+      {spec.extras.roofRack &&
+        [-0.34, 0.34].map((x) => (
+          <mesh key={`rail${x}`} position={[x * W, cabinY + cabinH * 0.52, cabinZ]}>
+            <boxGeometry args={[W * 0.06, H * 0.04, cabinLen * 0.92]} />
+            <meshStandardMaterial color={spec.trim} metalness={0.85} roughness={0.3} />
+          </mesh>
+        ))}
+      {spec.extras.lightBar && (
+        <mesh position={[0, cabinY + cabinH * 0.6, cabinZ + cabinLen * 0.4]}>
+          <boxGeometry args={[W * 0.6, H * 0.05, 0.08]} />
+          <meshStandardMaterial color="#fffbe8" emissive="#fff2b0" emissiveIntensity={1.4} />
+        </mesh>
+      )}
+      {/* подсветка днища у WERT Edition */}
+      {spec.extras.underglow && (
+        <mesh position={[0, ride * 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[W * 1.1, L * 0.9]} />
+          <meshBasicMaterial color={spec.accent} transparent opacity={0.35} />
+        </mesh>
+      )}
+      {/* выхлоп */}
+      {[-0.34, 0.34].map((x) => (
+        <mesh key={`ex${x}`} position={[x * W, ride + bodyH * 0.1, tailZ - 0.06]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.07, 0.07, 0.16, 12]} />
+          <meshStandardMaterial color={spec.trim} metalness={0.95} roughness={0.25} />
         </mesh>
       ))}
     </group>
   );
 }
 
-/**
- * Машина собрана из примитивов прямо в сцене: никаких внешних .glb,
- * поэтому «Покатушки» запускаются сразу и не зависят от загрузки ассетов.
- */
-function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
+function Vehicle({ car, ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
+  const spec = useMemo(() => driveSpec(car.modelId), [car.modelId]);
   const g = useRef<THREE.Group>(null);
   const s = useRef(newDrive());
   const ready = useRef(false);
-  const wheels = useRef<THREE.Object3D[]>([]);
+  const spinRefs = useRef<Record<string, THREE.Group | null>>({});
+  const steerRefs = useRef<Record<string, THREE.Group | null>>({});
   const behind = useMemo(() => new THREE.Vector3(), []);
-
-  useEffect(() => {
-    wheels.current = WHEEL_NAMES.map((n) => g.current?.getObjectByName(n)).filter((o): o is THREE.Object3D => Boolean(o));
-  }, []);
+  const limits = useMemo(() => ({ max: topSpeedMs(spec), accel: spec.accel }), [spec]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    const debug = { get state() { return { ...s.current, mode: modeRef.current }; }, sim(seconds: number) {
-      for (let i = 0; i < Math.min(seconds, 60) * 60; i++) s.current = stepDrive(s.current, ctl.current, modeRef.current, 1 / 60);
-      return { ...s.current };
-    } };
+    const debug = {
+      get state() { return { ...s.current, mode: modeRef.current }; },
+      sim(seconds: number) {
+        for (let i = 0; i < Math.min(seconds, 60) * 60; i++) s.current = stepDrive(s.current, ctl.current, modeRef.current, 1 / 60, limits);
+        return { ...s.current };
+      },
+    };
     Object.assign(window, { __drive: debug });
     return () => { Reflect.deleteProperty(window, "__drive"); };
-  }, [ctl, modeRef]);
+  }, [ctl, modeRef, limits]);
 
   useFrame(({ camera, gl }, delta) => {
-    const car = g.current;
-    if (!car) return;
+    const body = g.current;
+    if (!body) return;
     if (resetRef.current) { s.current = newDrive(); resetRef.current = false; }
     const dt = Math.min(delta, 0.05);
-    s.current = stepDrive(s.current, ctl.current, modeRef.current, dt);
+    s.current = stepDrive(s.current, ctl.current, modeRef.current, dt, limits);
     const v = s.current;
-    car.position.set(v.x, 0, v.z); car.rotation.y = v.yaw;
-    for (const wheel of wheels.current) {
-      wheel.rotation.x += (v.speed * dt) / 0.5;
-      if (wheel.name.includes("front")) wheel.rotation.y = (Number(ctl.current.right) - Number(ctl.current.left)) * 0.35;
+    body.position.set(v.x, 0, v.z);
+    body.rotation.y = v.yaw;
+
+    // Колёса: катятся ровно по скорости и радиусу, передние ещё и рулят.
+    const spin = wheelSpinDelta(v.speed, dt, spec.wheel.radius);
+    for (const key of WHEEL_KEYS) {
+      const wheel = spinRefs.current[key];
+      if (wheel) wheel.rotation.x += spin;
     }
+    const steerTarget = frontWheelSteer(ctl.current);
+    for (const key of ["fl", "fr"] as const) {
+      const pivot = steerRefs.current[key];
+      if (pivot) pivot.rotation.y += (steerTarget - pivot.rotation.y) * Math.min(1, dt * 10);
+    }
+
     behind.set(v.x - Math.sin(v.yaw) * 9, 4.6, v.z - Math.cos(v.yaw) * 9);
     camera.position.lerp(behind, 1 - Math.exp(-6 * dt));
     camera.lookAt(v.x + Math.sin(v.yaw) * 3, 1.1, v.z + Math.cos(v.yaw) * 3);
@@ -88,61 +280,20 @@ function Vehicle({ ctl, modeRef, speedRef, slipRef, resetRef }: SceneProps) {
     ready.current = true;
   });
 
+  const wheelX = spec.size.width / 2 - spec.wheel.width * 0.35;
+  const wheelZ = spec.size.length * 0.31;
+
   return (
     <group ref={g}>
-      {/* кузов */}
-      <mesh position={[0, 0.62, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.86, 0.56, 4.2]} />
-        <meshStandardMaterial color="#17171b" metalness={0.72} roughness={0.3} />
-      </mesh>
-      {/* капот и корма чуть ниже — силуэт купе */}
-      <mesh position={[0, 0.92, -1.05]} castShadow>
-        <boxGeometry args={[1.7, 0.24, 1.7]} />
-        <meshStandardMaterial color="#1d1d22" metalness={0.7} roughness={0.34} />
-      </mesh>
-      {/* кабина */}
-      <mesh position={[0, 1.12, 0.25]} castShadow>
-        <boxGeometry args={[1.56, 0.44, 1.9]} />
-        <meshStandardMaterial color="#202026" metalness={0.6} roughness={0.38} />
-      </mesh>
-      {/* стёкла */}
-      <mesh position={[0, 1.16, 0.25]}>
-        <boxGeometry args={[1.6, 0.3, 1.7]} />
-        <meshStandardMaterial color="#0b1a24" metalness={0.9} roughness={0.08} />
-      </mesh>
-      {/* красная полоса по борту */}
-      <mesh position={[0, 0.6, 0]}>
-        <boxGeometry args={[1.9, 0.1, 3.4]} />
-        <meshStandardMaterial color="#d81f2a" emissive="#5c0006" emissiveIntensity={0.4} roughness={0.4} />
-      </mesh>
-      {/* фары */}
-      {[-0.6, 0.6].map((x) => (
-        <mesh key={`hl${x}`} position={[x, 0.72, -2.08]}>
-          <boxGeometry args={[0.44, 0.16, 0.08]} />
-          <meshStandardMaterial color="#fff6d5" emissive="#ffe9a8" emissiveIntensity={1.6} />
-        </mesh>
-      ))}
-      {/* стопы */}
-      {[-0.62, 0.62].map((x) => (
-        <mesh key={`tl${x}`} position={[x, 0.76, 2.08]}>
-          <boxGeometry args={[0.42, 0.14, 0.08]} />
-          <meshStandardMaterial color="#ff3b30" emissive="#ff1a10" emissiveIntensity={1.4} />
-        </mesh>
-      ))}
-      {/* антикрыло */}
-      <mesh position={[0, 1.06, 1.92]} castShadow>
-        <boxGeometry args={[1.5, 0.07, 0.42]} />
-        <meshStandardMaterial color="#101014" metalness={0.6} roughness={0.4} />
-      </mesh>
-      {/* выхлоп */}
-      {[-0.35, 0.35].map((x) => (
-        <mesh key={`ex${x}`} position={[x, 0.36, 2.1]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.09, 0.09, 0.2, 12]} />
-          <meshStandardMaterial color="#4a4f57" metalness={0.95} roughness={0.25} />
-        </mesh>
-      ))}
+      <CarBody spec={spec} />
       {WHEELS.map((w) => (
-        <Wheel key={w.name} name={w.name} position={w.position} />
+        <Wheel
+          key={w.key}
+          spec={spec}
+          position={[w.x * wheelX, spec.wheel.radius, w.z * wheelZ]}
+          spinRef={(o) => { spinRefs.current[w.key] = o; }}
+          steerRef={w.steer ? (o) => { steerRefs.current[w.key] = o; } : () => {}}
+        />
       ))}
     </group>
   );

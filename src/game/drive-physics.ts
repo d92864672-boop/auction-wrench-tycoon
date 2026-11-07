@@ -1,8 +1,12 @@
 // Arcade driving is transient: it never changes garage cars or the economy.
-// +Z is forward; negative yaw turns screen-left from the chase camera.
+// +Z is forward and the chase camera sits behind at -Z, so the car nose points to +Z.
+// Positive yaw turns the nose toward +X, which is screen-left for that camera;
+// steering therefore uses (left - right) so that the left pad really goes left.
 export type DriveMode = "fwd" | "rwd" | "awd";
 export type Controls = { up: boolean; down: boolean; left: boolean; right: boolean; drift: boolean };
 export type DriveState = { x: number; z: number; yaw: number; vx: number; vz: number; speed: number; slip: number };
+/** Ограничения конкретной машины: максимальная скорость (м/с) и разгон. */
+export type DriveLimits = { max?: number; accel?: number };
 export const DRIVE_MODES: { id: DriveMode; label: string }[] = [
   { id: "fwd", label: "Передний" }, { id: "rwd", label: "Задний" }, { id: "awd", label: "Полный" },
 ];
@@ -16,14 +20,33 @@ export const newDrive = (): DriveState => ({ x: 0, z: 0, yaw: 0, vx: 0, vz: 0, s
 export const KEY_CONTROLS: Record<string, keyof Controls> = {
   KeyW: "up", ArrowUp: "up", KeyS: "down", ArrowDown: "down", KeyA: "left", ArrowLeft: "left", KeyD: "right", ArrowRight: "right", Space: "drift",
 };
-export function stepDrive(s: DriveState, c: Controls, mode: DriveMode, delta: number): DriveState {
+
+/**
+ * Угол поворота колеса за кадр (радианы).
+ * Машина катится вперёд по +Z, поэтому верх колеса уходит вперёд:
+ * положительный угол вокруг локальной оси X — это правильное вращение.
+ */
+export function wheelSpinDelta(speed: number, delta: number, radius: number): number {
+  if (!Number.isFinite(speed) || !Number.isFinite(radius) || radius <= 0) return 0;
+  const dt = Math.max(0, Math.min(delta, 0.05));
+  return (speed * dt) / radius;
+}
+
+/** Угол поворота передних колёс: влево — положительный, как и поворот кузова. */
+export function frontWheelSteer(controls: Controls, max = 0.45): number {
+  return (Number(controls.left) - Number(controls.right)) * max;
+}
+
+export function stepDrive(s: DriveState, c: Controls, mode: DriveMode, delta: number, limits?: DriveLimits): DriveState {
   const dt = Math.max(0, Math.min(delta, 0.05)), p = DRIVE_TUNING[mode];
+  const accel = Math.max(1, limits?.accel ?? p.accel);
+  const topSpeed = Math.max(1, limits?.max ?? p.max);
   let forward = s.vx * Math.sin(s.yaw) + s.vz * Math.cos(s.yaw);
-  if (c.up) forward += p.accel * dt;
-  if (c.down) forward -= (forward > 0.3 ? 25 : p.accel * 0.65) * dt;
+  if (c.up) forward += accel * dt;
+  if (c.down) forward -= (forward > 0.3 ? 25 : accel * 0.65) * dt;
   forward *= Math.exp(-(c.drift ? 0.5 : 0.16) * dt);
-  forward = Math.max(-9, Math.min(p.max, forward));
-  const steer = Number(c.right) - Number(c.left);
+  forward = Math.max(-9, Math.min(topSpeed, forward));
+  const steer = Number(c.left) - Number(c.right);
   const yaw = s.yaw + steer * p.turn * (c.drift ? 1.45 : 1) * Math.min(1, Math.abs(forward) / 6) * Math.sign(forward || 1) * dt;
   const sin = Math.sin(yaw), cos = Math.cos(yaw);
   // Keep momentum in world space while the body turns: reduced lateral grip creates real sliding.
