@@ -10,125 +10,240 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Вход — wertперекуп" },
-      { name: "description", content: "Войди в wertперекуп, чтобы играть онлайн и сохранять прогресс." },
-      { property: "og:title", content: "Вход — wertперекуп" },
-      { property: "og:description", content: "Аккаунт для онлайн-игры в wertперекуп." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { name: "description", content: "Вход в игру: код на почту, пароль или Google." },
     ],
   }),
   component: AuthPage,
 });
 
+const errorText = (e: unknown, fallback: string) =>
+  e instanceof Error && e.message ? e.message : typeof e === "string" ? e : fallback;
+
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [step, setStep] = useState<"form" | "code">("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nickname, setNickname] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
-  const [googleHint, setGoogleHint] = useState<string | null>(null);
+  const [passwordLogin, setPasswordLogin] = useState(false);
+  const [google, setGoogle] = useState<{ available: boolean; reason: string | null } | null>(null);
 
-  // Возврат с accounts.google.com: Supabase отдаёт сессию в hash — client сам её подхватит.
   useEffect(() => {
     let alive = true;
-    const goHome = () => {
-      if (alive) navigate({ to: "/" });
-    };
-
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) goHome();
+    void fetchGoogleStatus().then((s) => {
+      if (alive) setGoogle(s);
     });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) goHome();
-    });
-
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const errorText = params.get("error_description") ?? new URLSearchParams(window.location.search).get("error_description");
-    if (errorText) toast.error(decodeURIComponent(errorText).replace(/\+/g, " "));
-
-    void fetchGoogleStatus().then((status) => {
-      if (!alive) return;
-      setGoogleHint(status.available ? null : "Google-вход пока недоступен — войди по почте.");
-    });
-
     return () => {
       alive = false;
-      sub.subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate({ to: "/" });
+    });
   }, [navigate]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    if (mode === "in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) { toast.error("Неверная почта или пароль"); return; }
-      navigate({ to: "/" });
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin, data: { nickname: nickname || undefined } },
-      });
-      setBusy(false);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Проверь почту и подтверди аккаунт");
-    }
-  };
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 
-  const google = async () => {
-    setGoogleBusy(true);
-    const result = await signInWithGoogle();
-    if (!result.started) {
-      setGoogleBusy(false);
-      toast.error(result.message ?? "Не удалось войти через Google");
+  async function sendCode() {
+    if (!emailOk) {
+      toast.error("Введи корректную почту");
       return;
     }
-    // Дальше браузер уходит на страницу выбора Google-аккаунта.
-    toast("Переходим в Google…");
-  };
+    setBusy(true);
+    try {
+      // Пароль сохраняем при первом входе, но пускаем по коду из письма.
+      if (password.trim().length >= 6) {
+        const { error } = await supabase.auth.signUp({ email: email.trim(), password });
+        // «Уже зарегистрирован» не мешает: код отправим всё равно.
+        if (error && !/registered|exists/i.test(error.message)) throw error;
+      }
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: typeof window === "undefined" ? undefined : `${window.location.origin}/auth`,
+        },
+      });
+      if (error) throw error;
+      setStep("code");
+      toast.success("Код отправлен на почту");
+    } catch (e) {
+      toast.error(errorText(e, "Не удалось отправить код"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode() {
+    const token = code.replace(/\D/g, "");
+    if (token.length < 6) {
+      toast.error("Введи 6-значный код из письма");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" });
+      if (error) throw error;
+      toast.success("Готово, ты в игре");
+      navigate({ to: "/" });
+    } catch (e) {
+      toast.error(errorText(e, "Код не подошёл. Проверь письмо и попробуй ещё раз"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loginWithPassword() {
+    if (!emailOk) {
+      toast.error("Введи корректную почту");
+      return;
+    }
+    if (password.trim().length < 6) {
+      toast.error("Пароль — минимум 6 символов");
+      return;
+    }
+    setBusy(true);
+    try {
+      const signIn = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (!signIn.error) {
+        toast.success("Готово, ты в игре");
+        navigate({ to: "/" });
+        return;
+      }
+      const signUp = await supabase.auth.signUp({ email: email.trim(), password });
+      if (signUp.error) throw signUp.error;
+      toast.success("Аккаунт создан. Проверь почту, чтобы подтвердить его");
+    } catch (e) {
+      toast.error(errorText(e, "Не удалось войти"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="wp-default flex min-h-screen items-center justify-center p-4">
-      <div className="glass w-full max-w-sm space-y-4 rounded-3xl border border-border p-6">
-        <div className="text-center">
-          <h1 className="font-display text-2xl font-semibold">wertперекуп</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{mode === "in" ? "Вход в аккаунт" : "Новый аккаунт"}</p>
-        </div>
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 p-5">
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl font-bold">Вход в wertперекуп</h1>
+        <p className="text-sm text-muted-foreground">
+          Введи почту и пароль — пришлём код на почту. Кодом и подтвердишь вход.
+        </p>
+      </div>
 
+      {step === "form" ? (
+        <form
+          className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sendCode();
+          }}
+        >
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Почта</span>
+            <Input
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              placeholder="you@mail.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Пароль</span>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              placeholder="минимум 6 символов"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? "Отправляем…" : "Получить код на почту"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-xs"
+            onClick={() => setPasswordLogin((v) => !v)}
+          >
+            {passwordLogin ? "Вход по коду из письма" : "Войти только по паролю"}
+          </Button>
+          {passwordLogin && (
+            <Button type="button" variant="secondary" className="w-full" disabled={busy} onClick={() => void loginWithPassword()}>
+              Войти по паролю
+            </Button>
+          )}
+        </form>
+      ) : (
+        <form
+          className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void verifyCode();
+          }}
+        >
+          <p className="text-sm">
+            Код отправлен на <span className="font-semibold">{email.trim()}</span>
+          </p>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Код из письма</span>
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="000000"
+              className="text-center font-display text-2xl tracking-[0.4em]"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+          </label>
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? "Проверяем…" : "Войти"}
+          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" className="flex-1" disabled={busy} onClick={() => void sendCode()}>
+              Отправить снова
+            </Button>
+            <Button type="button" variant="ghost" className="flex-1" onClick={() => setStep("form")}>
+              Изменить почту
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Код действует час. Если в письме только ссылка — нажми её, вход произойдёт автоматически.
+          </p>
+        </form>
+      )}
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />или<span className="h-px flex-1 bg-border" />
+        </div>
         <Button
           variant="secondary"
           className="w-full"
-          data-testid="google-signin"
-          disabled={googleBusy}
-          onClick={google}
+          disabled={busy}
+          onClick={async () => {
+            const result = await signInWithGoogle();
+            if (!result.started) toast.error(result.message ?? "Не удалось войти через Google");
+          }}
         >
           <span aria-hidden className="mr-2 font-display text-base font-bold">G</span>
-          {googleBusy ? "Открываем Google…" : "Продолжить с Google"}
+          Продолжить с Google
         </Button>
-        {googleHint && <p className="text-center text-xs text-muted-foreground">{googleHint}</p>}
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          или по почте
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <form onSubmit={submit} className="space-y-2">
-          {mode === "up" && <Input placeholder="Ник в игре" maxLength={20} value={nickname} onChange={(e) => setNickname(e.target.value)} />}
-          <Input type="email" required placeholder="Почта" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Input type="password" required minLength={6} placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <Button type="submit" className="w-full" disabled={busy}>{mode === "in" ? "Войти" : "Создать аккаунт"}</Button>
-        </form>
-        <button className="w-full text-sm text-muted-foreground underline" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-          {mode === "in" ? "Нет аккаунта? Регистрация" : "Уже есть аккаунт? Войти"}
-        </button>
-        <Link to="/" className="block text-center text-sm text-primary">← Играть без входа</Link>
+        {google && !google.available && google.reason && (
+          <p className="text-xs text-muted-foreground">{google.reason}</p>
+        )}
       </div>
-    </div>
+
+      <Button variant="ghost" asChild className="w-full">
+        <Link to="/">Вернуться в игру</Link>
+      </Button>
+    </main>
   );
 }
