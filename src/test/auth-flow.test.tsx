@@ -103,6 +103,22 @@ describe("Вход в игру", () => {
     expect(mocks.signInWithOtp).not.toHaveBeenCalled();
   });
 
+  it("объясняет лимит писем Supabase по-русски", async () => {
+    mocks.signInWithOtp.mockRejectedValue(
+      new Error("For security purposes, you can only request this after 44 seconds."),
+    );
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(field(container, 'input[type="email"]'), { target: { value: "player@wert.ru" } });
+    fireEvent.click(screen.getByRole("button", { name: /Получить код на почту/ }));
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Слишком часто: письмо можно запросить примерно раз в минуту. Подожди и попробуй снова.",
+      ),
+    );
+  });
+
   it("показывает кнопку входа через Google", () => {
     render(<AuthPage />);
 

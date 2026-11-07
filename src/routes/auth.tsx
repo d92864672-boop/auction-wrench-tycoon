@@ -16,8 +16,18 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const errorText = (e: unknown, fallback: string) =>
-  e instanceof Error && e.message ? e.message : typeof e === "string" ? e : fallback;
+// Supabase отвечает по-английски: частые случаи переводим на понятный язык.
+const errorText = (e: unknown, fallback: string) => {
+  const raw = e instanceof Error && e.message ? e.message : typeof e === "string" ? e : "";
+  const text = raw || fallback;
+  if (/rate limit|only request this after|too many requests|after \d+ seconds/i.test(text))
+    return "Слишком часто: письмо можно запросить примерно раз в минуту. Подожди и попробуй снова.";
+  if (/signups not allowed|signup.*disabled|email signups are disabled/i.test(text))
+    return "Регистрация по почте выключена в Supabase — включи Email-провайдер в настройках проекта.";
+  if (/invalid login credentials/i.test(text)) return "Неверная почта или пароль.";
+  if (/email not confirmed/i.test(text)) return "Почта не подтверждена — войди по коду из письма.";
+  return text;
+};
 
 function AuthPage() {
   const navigate = useNavigate();
