@@ -168,11 +168,13 @@ function AuthPage() {
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Почта</span>
             <Input
+              ref={emailRef}
               type="email"
+              name="email"
               autoComplete="email"
               inputMode="email"
               placeholder="you@mail.com"
-              value={email}
+              defaultValue=""
               onChange={(e) => setEmail(e.target.value)}
               required
             />
@@ -180,10 +182,12 @@ function AuthPage() {
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Пароль</span>
             <Input
+              ref={passwordRef}
               type="password"
+              name="password"
               autoComplete="current-password"
               placeholder="минимум 6 символов"
-              value={password}
+              defaultValue=""
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
