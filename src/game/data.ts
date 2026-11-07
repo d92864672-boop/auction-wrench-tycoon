@@ -5,6 +5,8 @@ export type CarModel = {
   name: string;
   base: number; // value of a new car in perfect condition
   rare?: boolean;
+  /** Premium series sold only by WERTOOS BLACK dealers, never spawned on the open market. */
+  black?: boolean;
   origin: "ru" | "eu" | "jp" | "us";
 };
 
@@ -168,3 +170,125 @@ export function plateValue(plate: string): number {
   if (plate.includes("W")) v *= 10;
   return v;
 }
+
+// ============= WERTOOS BLACK =============
+
+/** Premium cars sold only through WERTOOS BLACK dealers. */
+export const BLACK_CARS: CarModel[] = [
+  { id: "wb-urus", name: "WERTOOS BLACK Urus", base: 22_000_000, origin: "eu", rare: true, black: true },
+  { id: "wb-g63", name: "Gelik Brabus BLACK", base: 26_500_000, origin: "eu", rare: true, black: true },
+  { id: "wb-rs6", name: "Audi RS6 BLACK Edition", base: 9_800_000, origin: "eu", rare: true, black: true },
+  { id: "wb-e63", name: "Mercedes E63 AMG BLACK", base: 8_400_000, origin: "eu", rare: true, black: true },
+  { id: "wb-tesla", name: "Tesla Plaid BLACK", base: 7_900_000, origin: "us", rare: true, black: true },
+  { id: "wb-supra", name: "Supra MK4 Night", base: 4_200_000, origin: "jp", rare: true, black: true },
+  { id: "wb-lc200", name: "LC200 BLACK Armor", base: 11_500_000, origin: "ru", rare: true, black: true },
+  { id: "wb-f40", name: "Ferrari F40 Nero", base: 65_000_000, origin: "eu", rare: true, black: true },
+];
+
+// Black-series cars join the global catalog so model lookups, values and photos work.
+CAR_MODELS.push(...BLACK_CARS);
+
+export type BlackItemKind = "acc" | "vip" | "plate" | "boost";
+
+export type BlackItem = {
+  id: string;
+  name: string;
+  desc: string;
+  price: number;
+  kind: BlackItemKind;
+  /** VIP days, boost stacks or nothing for accessories. */
+  value?: number;
+};
+
+/** WERTOOS BLACK shop assortment. */
+export const BLACK_ITEMS: BlackItem[] = [
+  { id: "bk-hoodie", name: "Худи WERTOOS BLACK", desc: "Лимитированный мерч клуба", price: 350_000, kind: "acc" },
+  { id: "bk-wheel", name: "Руль карбон BLACK", desc: "Карбон, алькантара, подогрев", price: 480_000, kind: "acc" },
+  { id: "bk-chain", name: "Цепь BLACK 999", desc: "Золото 999 пробы, 120 г", price: 1_200_000, kind: "acc" },
+  { id: "bk-watch", name: "Часы AP Black", desc: "Керамика. Работает на переговорах", price: 3_900_000, kind: "acc" },
+  { id: "bk-notebook", name: "База клиентов BLACK", desc: "+2% к цене продажи навсегда", price: 900_000, kind: "boost" },
+  { id: "bk-lift", name: "Подъёмник в чёрном сервисе", desc: "+2% к цене продажи навсегда", price: 1_500_000, kind: "boost" },
+  { id: "bk-vip7", name: "BLACK VIP на 7 дней", desc: "+2 слота в гараже и +VIP статус", price: 2_500_000, kind: "vip", value: 7 },
+  { id: "bk-vip30", name: "BLACK VIP на 30 дней", desc: "+2 слота в гараже и +VIP статус", price: 8_000_000, kind: "vip", value: 30 },
+  { id: "bk-plate", name: "Блатной номер BLACK", desc: "Случайный номер из закрытой базы", price: 4_000_000, kind: "plate" },
+];
+
+export type BlackSeller = {
+  id: string;
+  name: string;
+  title: string;
+  city: string;
+  rating: number;
+  deals: number;
+  /** Share off the model base price. */
+  discount: number;
+  cars: string[];
+  greeting: string;
+  style: "rude" | "polite" | "street";
+};
+
+/** Dealers behind WERTOOS BLACK. Each one sells a couple of exclusive cars. */
+export const BLACK_SELLERS: BlackSeller[] = [
+  {
+    id: "soha",
+    name: "Соха",
+    title: "Дилер BLACK · Москва",
+    city: "Москва",
+    rating: 4.8,
+    deals: 214,
+    discount: 0.18,
+    cars: ["wb-urus", "wb-g63"],
+    greeting: "Здарова. Только чёрные тачки, только чёткие сделки. Что смотрим?",
+    style: "street",
+  },
+  {
+    id: "adi",
+    name: "Ади",
+    title: "Ночной гараж · Питер",
+    city: "Санкт-Петербург",
+    rating: 4.6,
+    deals: 168,
+    discount: 0.22,
+    cars: ["wb-f40", "wb-rs6"],
+    greeting: "Приветствую. Есть пара машин из закрытого списка. Интересует?",
+    style: "polite",
+  },
+  {
+    id: "timur",
+    name: "Тимур",
+    title: "BLACK автосалон · Казань",
+    city: "Казань",
+    rating: 4.9,
+    deals: 301,
+    discount: 0.15,
+    cars: ["wb-lc200", "wb-tesla"],
+    greeting: "Салам. Тачки без вопросов, документы чистые. Назови модель.",
+    style: "polite",
+  },
+  {
+    id: "kris",
+    name: "Крис",
+    title: "Дрифт-клуб BLACK · Екатеринбург",
+    city: "Екатеринбург",
+    rating: 4.4,
+    deals: 96,
+    discount: 0.25,
+    cars: ["wb-supra", "wb-e63"],
+    greeting: "Йо. Ночные проекты, всё на ходу. Торг только за наличку.",
+    style: "street",
+  },
+];
+
+export type BotPlayer = { id: string; name: string; deals: number; rating: number; online: boolean; tag: string };
+
+/** Bots that fill the BLACK online lobby and the deals leaderboard. */
+export const BOTS: BotPlayer[] = [
+  { id: "bot-soha", name: "SoHa_777", deals: 214, rating: 4.8, online: true, tag: "BLACK" },
+  { id: "bot-timur", name: "TimurBlack", deals: 301, rating: 4.9, online: true, tag: "Дилер" },
+  { id: "bot-adi", name: "AdiNight", deals: 168, rating: 4.6, online: true, tag: "Ночной" },
+  { id: "bot-kris", name: "KrisDrift", deals: 96, rating: 4.4, online: true, tag: "Дрифт" },
+  { id: "bot-vaz", name: "VazGen_09", deals: 74, rating: 4.1, online: false, tag: "Классика" },
+  { id: "bot-night", name: "NightRider", deals: 51, rating: 3.9, online: true, tag: "Гонщик" },
+  { id: "bot-boss", name: "BossMsk", deals: 39, rating: 3.7, online: false, tag: "Бизнес" },
+  { id: "bot-kid", name: "Ferrari_Kid", deals: 12, rating: 3.2, online: true, tag: "Новичок" },
+];
