@@ -63,20 +63,31 @@ function AuthPage() {
     });
   }, [navigate]);
 
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const isEmail = (mail: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail);
+
+  // Возврат на шаг формы: показываем уже введённые почту и пароль.
+  useEffect(() => {
+    if (step !== "form") return;
+    if (emailRef.current && !emailRef.current.value) emailRef.current.value = email;
+    if (passwordRef.current && !passwordRef.current.value) passwordRef.current.value = password;
+  }, [step, email, password]);
 
   async function sendCode() {
-    if (!emailOk) {
+    const mail = readEmail();
+    if (!isEmail(mail)) {
       toast.error("Введи корректную почту");
       return;
     }
+    const pass = readPassword();
+    if (mail !== email) setEmail(mail);
+    if (pass !== password) setPassword(pass);
     setBusy(true);
     try {
       // Пароль применим после подтверждения кодом: так письмо с кодом уходит
       // сразу, без лишнего письма-подтверждения регистрации и лишней задержки.
-      setPendingPassword(password.trim().length >= 6 ? password : null);
+      setPendingPassword(pass.trim().length >= 6 ? pass : null);
       const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
+        email: mail,
         options: {
           shouldCreateUser: true,
           emailRedirectTo: typeof window === "undefined" ? undefined : `${window.location.origin}/auth`,
@@ -122,23 +133,27 @@ function AuthPage() {
   }
 
   async function loginWithPassword() {
-    if (!emailOk) {
+    const mail = readEmail();
+    const pass = readPassword();
+    if (!isEmail(mail)) {
       toast.error("Введи корректную почту");
       return;
     }
-    if (password.trim().length < 6) {
+    if (pass.trim().length < 6) {
       toast.error("Пароль — минимум 6 символов");
       return;
     }
+    if (mail !== email) setEmail(mail);
+    if (pass !== password) setPassword(pass);
     setBusy(true);
     try {
-      const signIn = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const signIn = await supabase.auth.signInWithPassword({ email: mail, password: pass });
       if (!signIn.error) {
         toast.success("Готово, ты в игре");
         navigate({ to: "/" });
         return;
       }
-      const signUp = await supabase.auth.signUp({ email: email.trim(), password });
+      const signUp = await supabase.auth.signUp({ email: mail, password: pass });
       if (signUp.error) throw signUp.error;
       toast.success("Аккаунт создан. Проверь почту, чтобы подтвердить его");
     } catch (e) {
